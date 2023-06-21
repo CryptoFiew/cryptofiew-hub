@@ -1,7 +1,8 @@
 # Crypto Pulse Minions
 
-*** ⚠️ Working progress ⚠️ ***
-Due author's ADHD, it is possible that this project may progress at a slower pace than other similar projects. 
+⚠️ Working progress ⚠️ 
+
+Due to author's ADHD, it is possible that this project may progress at a slower pace than other similar projects. 
 
 Crypto Pulse Minions is a project that uses Node.js and Redis to manage WebSocket client processes for monitoring cryptocurrency prices on various exchanges.
 
@@ -48,9 +49,9 @@ This will start the script that listens for commands on the Redis channel and ma
 We welcome contributions to Crypto Pulse Minions! If you'd like to contribute, please follow these steps:
 
 1. Fork this repository to your own GitHub account and clone it to your local machine.
-2. Create a new branch for your changes: `git checkout -b my-branch-name`
+2. Create a new branch for your changes: `git checkout -b feat/new-feature`
 3. Make your changes and commit them with a descriptive commit message: `git commit -m "Add new feature"`
-4. Push your changes to your forked repository: `git push origin my-branch-name`
+4. Push your changes to your forked repository: `git push origin feat/new-feature`
 5. Create a pull request from your forked repository to this repository.
 
 We will review your changes and merge them if they fit with the project goals and standards.
