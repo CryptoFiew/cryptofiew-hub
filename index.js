@@ -1,5 +1,7 @@
 const Redis = require('ioredis')
 const { spawn } = require('child_process')
+const monitorTopKline = require('./services/db-warmup');
+const WEBSOCKET_TIMEOUT_MS = 60000; // 1 minute
 
 const redisConnection = { host: 'localhost', port: 6379 }
 const subClient = new Redis(redisConnection)
@@ -96,6 +98,17 @@ function handleMessage(channel, message) {
     console.error(`Failed to parse message: ${message}`)
   }
 }
+
+// Perform db warmup
+monitorTopKline()
+    .then(() => {
+      console.log('Kline data written to VictoriaMetrics');
+      setTimeout(() => {
+        console.log('WebSocket connection closed');
+        ws.close();
+      }, WEBSOCKET_TIMEOUT_MS);
+    })
+    .catch(error => console.error(error));
 
 // Subscribe to the minion_telephone channel
 subClient.subscribe('minion_telephone', (error) => {
