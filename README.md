@@ -11,15 +11,11 @@ This program should acting like a minion hub for other system to utilise its fun
 ## Requirements
 To use Crypto Pulse Minions, you'll need to have the following installed on your machine:
 
-•	Node.js (https://nodejs.org/)
-
-•	Redis (https://redis.io/)
-
-•	MongoDB (https://mongodb.com/)
-
-•   VictoriaMetric (https://victoriametrics.com/)
-
-•   RabbitMQ (https://www.rabbitmq.com/)
+* Node.js (https://nodejs.org/)
+* Redis (https://redis.io/)
+* MongoDB (https://mongodb.com/)
+* VictoriaMetric (https://victoriametrics.com/)
+* RabbitMQ (https://www.rabbitmq.com/)
 
 ## Installation
 
