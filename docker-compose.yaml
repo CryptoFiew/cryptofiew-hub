@@ -1,34 +1,40 @@
-version: '3'
-
+version: '3.8'
 services:
   cp-minions:
     build:
       context: .
       dockerfile: Dockerfile
+    depends_on:
+      - cp-rabbit
     env_file:
       - .env
-    depends_on:
-      - rabbitmq
 
-  redis:
-    image: redis:latest
-    volumes:
-      - ./runtime/redis/data:/data
-    ports:
-      - "6379:6379"
-
-  victoriametrics:
-    image: victoriametrics/victoria-metrics
-    command: ["-retentionPeriod=720h"]
-    volumes:
-      - ./runtime/data:/victoria-metrics-data
-    ports:
-      - "8428:8428"
-
-  rabbitmq:
+  cp-rabbit:
     image: rabbitmq:3-management
     ports:
       - "5672:5672"
       - "15672:15672"
     volumes:
-      - ./runtime/rabbitmq/data:/var/lib/rabbitmq
+      - cp-rabbit:/var/lib/rabbitmq
+
+  cp-redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - cp-redis:/data
+
+  cp-vm:
+    command: ["-retentionPeriod=720h"]
+    image: victoriametrics/victoria-metrics
+    ports:
+      - "8428:8428"
+    volumes:
+      - cp-vm:/victoria-metrics-data
+
+volumes:
+  cp-rabbit:
+  cp-redis:
+  cp-vm:
+
+

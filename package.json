@@ -19,9 +19,10 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@binance/connector": "^3.0.0-rc.2",
     "amqplib": "^0.10.3",
-    "binance-api-node": "^0.12.6",
     "child_process": "^1.0.2",
+    "console": "^0.7.2",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "http-errors": "^2.0.0",
@@ -30,7 +31,6 @@
     "pino": "^8.14.1",
     "pino-http": "^8.3.3",
     "pino-pretty": "^10.0.0",
-    "socket.io": "^4.6.2",
-    "ws": "^8.13.0"
+    "socket.io": "^4.6.2"
   }
 }
