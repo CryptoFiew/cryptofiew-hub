@@ -19,19 +19,22 @@ To use Crypto Pulse Minions, you'll need to have the following installed on your
 
 ## Installation
 
-To use Crypto Pulse Minions, you'll need to have Node.js and Redis installed on your machine. You can download Node.js from the official website, and Redis from the official website.
-
-Once you have Node.js and Redis installed, you can clone this repository to your local machine:
-
+To use Crypto Pulse Minions, you can follow these steps:
+1. Install Docker and Docker Compose on your machine.
+2. Clone this repository to your local machine:
 ```bash
 $ git clone https://github.com/stockfiew/crypto-pulse-minions.git
 ```
-After cloning the repository, navigate to the project directory and install the required dependencies:
-
+3. Navigate to the project directory and run the following command to pull the required images:
 ```bash
-$ cd crypto-pulse-minions
-$ npm install
+$ docker-compose pull
 ```
+4. After pulling the images, start the containers using the following command:
+```bash
+$ docker-compose up
+```
+5. The Crypto Pulse Minions should now be running and ready to use.
+Note: If you want to run the containers in the background, you can use the `-d` flag with the `docker-compose up` command.
 
 ## Usage
 
