@@ -8,6 +8,13 @@ Crypto Pulse Minions is a project that uses Node.js and Redis to manage WebSocke
 
 This program should acting like a minion hub for other system to utilise its functionality.
 
+## Requirements
+To use Crypto Pulse Minions, you'll need to have the following installed on your machine:
+•	Node.js (https://nodejs.org/)
+•	Redis (https://redis.io/)
+•   VictoriaMetric (https://victoriametrics.com/)
+•   RabbitMQ (https://www.rabbitmq.com/)
+
 ## Installation
 
 To use Crypto Pulse Minions, you'll need to have Node.js and Redis installed on your machine. You can download Node.js from the official website, and Redis from the official website.
@@ -26,17 +33,34 @@ $ npm install
 
 ## Usage
 
-To use Crypto Pulse Minions, you'll need to start the Redis server and run the Node.js script that manages the WebSocket client processes.
-
-To start the Redis server, open a new terminal window and run the following command:
+### Docker Compose
+For easier deployment and lower the knowledge requirement to run this system, highly suggest to choose docker to start this project.
 
 ```bash
-$ redis-server
+$ docker compose build
+$ docker compose up -d
 ```
 
-This will start the Redis server on the default port (6379).
+### Manually ( System-wide )
 
-To run the Node.js script, open another terminal window and navigate to the project directory. Then, run the following command:
+To use Crypto Pulse Minions, you'll need to have RabbitMQ, VictoriaMetrics and Redis setup correctly and running before proceed this introduction.
+
+#### RabbitMQ
+
+- [https://www.rabbitmq.com/download.html](https://www.rabbitmq.com/download.html)
+
+If you want to have more depth understanding about what is RabbitMQ, there is an article explain how RabbitMQ function quite [clearly](https://www.cloudamqp.com/blog/part1-rabbitmq-for-beginners-what-is-rabbitmq.html)
+
+#### VictoriaMetrics
+- [https://github.com/VictoriaMetrics/VictoriaMetrics](https://github.com/VictoriaMetrics/VictoriaMetrics)
+
+More depth reading about VictoriaMetrics: [What makes VictoriaMetrics the new de-facto standard choice?](https://medium.com/everything-full-stack/what-makes-victoriametrics-the-new-de-facto-standard-choice-for-open-source-monitoring-5d2b66b6e292)
+
+#### Redis
+
+- [https://redis.io/docs/getting-started/](https://redis.io/docs/getting-started/)
+
+More depth reading about Redis: [What is Redis what it does and why you should care](https://backendless.com/redis-what-it-is-what-it-does-and-why-you-should-care/)
 
 ```bash
 $ node index.js
