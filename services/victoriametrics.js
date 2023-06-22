@@ -1,4 +1,4 @@
-const moment = require('moment');
+const request = require('request');
 
 // Set the VictoriaMetrics configuration
 const vmConfig = {
@@ -7,89 +7,88 @@ const vmConfig = {
 };
 
 // Write data to VictoriaMetrics
-async function writeData(dataPoints) {
-    const response = await fetch(`${vmConfig.url}/api/v1/write`, {
-        method: 'POST',
-        body: dataPoints.join('\n'),
-    });
-    if (!response.ok) {
-        throw new Error(`Error writing data to VictoriaMetrics: ${response.statusText}`);
-    }
-    return await response.text();
-}
-
-async function queryData(query) {
-    const url = `${vmConfig.url}/api/v1/query?query=${encodeURIComponent(query)}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-        throw new Error(`Error querying data from VictoriaMetrics: ${response.statusText}`);
-    }
-    const json = await response.json();
-    if (json.status === 'error') {
-        throw new Error(json.error);
-    }
-    return json;
-}
-
-async function retrieveTopSymbols() {
-    const query = 'query_data(metric="ticker_day") | group_by(tags.symbol) | count_values(tags.symbol) | sort_desc()';
-    try {
-        const response = await queryData(query);
-        return response.data.result.map(result => result.metric);
-    } catch (error) {
-        console.error(`Error retrieving symbol list: ${error.message}`);
-        throw error;
-    }
-}
-
-async function checkIntervalList() {
-    const query = 'query_data(metric="interval_list") | last()';
-    try {
-        const response = await queryData(query);
-        return response.data.result.length > 0;
-    } catch (error) {
-        console.error(`Error checking interval list: ${error.message}`);
-        throw error;
-    }
-}
-
-async function retrieveIntervalList() {
-    const query = 'query_data(metric="interval_list") | last()';
-    try {
-        const response = await queryData(query);
-        if (response.data.result.length === 0) {
-            throw new Error('Interval list not found in VictoriaMetrics');
-        } else {
-            const intervals = response.data.result[0].fields.intervals;
-            return intervals.split(',');
-        }
-    } catch (error) {
-        console.error(`Error retrieving interval list: ${error.message}`);
-        throw error;
-    }
-}
-
-async function queryLatestDataPoint(metric) {
-    const query = `query_data(metric="${metric}") | last()`;
-    try {
-        const response = await queryData(query);
-        const dataPoint = response.data.result[0].value;
-        return {
-            timestamp: dataPoint[0],
-            symbol: dataPoint[1].symbol,
-            interval: dataPoint[1].interval,
+function writeData(dataPoints, url) {
+    const promDataPoints = dataPoints.map((dataPoint) => {
+        const promDataPoint = {
+            labels: dataPoint.tags || {},
+            samples: dataPoint.values.map((value, index) => {
+                return {
+                    value: value,
+                    timestamp: dataPoint.timestamps[index],
+                };
+            }),
         };
-    } catch (error) {
-        console.error(`Error querying latest data point for metric ${metric}: ${error.message}`);
-        throw error;
-    }
+        promDataPoint.labels.__name__ = dataPoint.metric;
+        return promDataPoint;
+    });
+
+    const options = {
+        url: url,
+        method: 'POST',
+        body: JSON.stringify({ 'data': promDataPoints }),
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    };
+
+    return new Promise((resolve, reject) => {
+        request(options, (error, response, body) => {
+            if (error) {
+                reject(new Error(`Error writing data to Prometheus: ${error.message}`));
+            } else if (response.statusCode !== 200) {
+                reject(new Error(`Error writing data to Prometheus: ${response.statusMessage}`));
+            } else {
+                resolve();
+            }
+        });
+    });
+}
+
+
+
+function queryData(query) {
+    const url = `${vmConfig.url}/api/v1/query?query=${encodeURIComponent(query)}`;
+    console.log(url);
+    return new Promise((resolve, reject) => {
+        const options = {
+            url,
+            method: 'GET',
+            json: true,
+        };
+        request(options, (error, response, body) => {
+            if (error) {
+                reject(new Error(`Error querying data from VictoriaMetrics: ${error.message}`));
+            } else if (response.statusCode !== 200) {
+                reject(new Error(`Error querying data from VictoriaMetrics: ${response.statusMessage}`));
+            } else if (body.status === 'error') {
+                reject(new Error(body.error));
+            } else {
+                resolve(body);
+            }
+        });
+    });
+}
+
+
+function queryLatestDataPoint(metric) {
+    const query = `query_data(metric='${metric}') | last()`;
+    return queryData(query)
+        .then(response => {
+            const dataPoint = response.data.result[0].value;
+            return {
+                timestamp: dataPoint[0],
+                symbol: dataPoint[1].symbol,
+                interval: dataPoint[1].interval,
+            };
+        })
+        .catch(error => {
+            console.error(`Error querying latest data point for metric ${metric}: ${error.message}`);
+            throw error;
+        });
 }
 
 module.exports = {
     writeData,
     queryData,
-    checkIntervalList,
     queryLatestDataPoint,
-    retrieveIntervalList,
-    retrieveTopSymbols,
 };

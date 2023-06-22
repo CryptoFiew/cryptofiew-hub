@@ -1,7 +1,7 @@
 const { WebsocketStream } = require('@binance/connector');
 const { createConnection, disposeConnection, sendMessage} = require('../services/rabbitmq');
+const { redis } = require('../services/redis')
 const { Console } = require('console');
-const Redis = require('ioredis');
 
 const WS_TRADE = 'ws-trade';
 const WS_KLINE = 'ws-kline';
@@ -9,7 +9,6 @@ const WS_KLINE = 'ws-kline';
 const logger = new Console({ stdout: process.stdout, stderr: process.stderr });
 
 const symbol = process.argv[2]; // Get the symbol from the command line arguments
-const intervals = process.argv[3] // Get the interval list
 
 // Define the time intervals to calculate high and low prices for
 const intervals = Object.freeze([5, 10, 15, 30, 60, 900, 1800, 3600, 86400, 604800, 2592000, 7776000, 15552000, 31536000, Infinity]);
@@ -18,9 +17,6 @@ const intervals = Object.freeze([5, 10, 15, 30, 60, 900, 1800, 3600, 86400, 6048
 const highPrices = Object.fromEntries(intervals.map(interval => [interval, -Infinity]));
 const lowPrices = Object.fromEntries(intervals.map(interval => [interval, Infinity]));
 
-// Connect to Redis
-const redisUrl = process.env.REDIS_URL;
-const redisClient = new Redis(redisUrl);
 
 
 async function main() {
@@ -53,10 +49,11 @@ async function main() {
     wsStream.trade(symbol);
 
     const timeIntervals = ['5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d'];
-    timeIntervals.forEach(async (value, index) => {
+    for (const value of timeIntervals) {
+        const index = timeIntervals.indexOf(value);
         wsStream.kline(symbol, value);
         logger.debug(`Element ${index}: ${value}`);
-    });
+    }
 }
 
 async function processTrade(trade, channel) {
@@ -92,7 +89,7 @@ async function processTrade(trade, channel) {
     const scoreValue = JSON.stringify(tradeObject);
     const cutoff = Date.now() - 60 * 60 * 1000;
 
-    await redisClient.multi()
+    await redis.pub.multi()
         .zadd(channelName, timestamp, scoreValue)
         .zremrangebyscore(channelName, 0, cutoff)
         .exec();
@@ -110,7 +107,7 @@ async function processTrade(trade, channel) {
             const highPriceChannel = `high:${interval}:${symbol}:binance`;
             const lowPriceChannel = `low:${interval}:${symbol}:binance`;
 
-            await redisClient.pipeline()
+            await redis.pub.pipeline()
                 .set(highPriceChannel, JSON.stringify(highPriceObject))
                 .set(lowPriceChannel, JSON.stringify(lowPriceObject))
                 .exec();
@@ -154,7 +151,7 @@ async function processKline(kline, channel) {
     const scoreValue = JSON.stringify(klineObject);
     const cutoff = Date.now() - 60 * 60 * 1000;
 
-    await redisClient.multi()
+    await redis.pub.multi()
         .zadd(channelName, klineObject.closeTime, scoreValue)
         .zremrangebyscore(channelName, 0, cutoff)
         .exec();
@@ -170,7 +167,6 @@ const shutdown = async () => {
         disposeConnection();
         disposeConnection();
     }, 6000);
-    redisClient.quit();
 };
 
 (async () => {

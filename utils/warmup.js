@@ -1,26 +1,33 @@
 const moment = require('moment');
 const { Spot } = require("@binance/connector");
 const { createMessageQueue, processMessageQueue } = require('../services/rabbitmq');
-const { writeData, checkIntervalList, queryLatestDataPoint, retrieveIntervalList, retrieveTopSymbols} = require("../services/victoriametrics");
+const { writeData, checkIntervalList, retrieveIntervalList, retrieveTopSymbols} = require("../services/victoriametrics");
+const {redis} = require("../services/redis");
+const {addWatch} = require("../services/commands");
+const {createCollection, findDocuments, isCollectionEmpty, findAllDocuments} = require("../services/mongo");
+const {updateMinionsFromTopSymbols, handleUpdateMinions} = require("./monitor");
 require('dotenv').config();
 
 async function warmUp() {
     try {
-        // Check if intervalList exists inside VictoriaMetric
-        const intervalListExists = await checkIntervalList();
+        // Create collections in mongodb
+        await createCollection('intervals')
+        await createCollection('top_symbols')
+
+        // Check if intervalList exists inside VictoriaMetrics
+        const intervalListExists = isCollectionEmpty('intervals')
         // If not, store the IntervalList
         if (!intervalListExists) {
+            console.log('Interval list not found in MongoDB');
             await storeIntervalList();
-            console.log('Interval list stored in VictoriaMetrics');
         } else {
-            console.log('Interval list already exists in VictoriaMetrics');
+            console.log('Interval list already exists in MongoDB');
         }
         // Retrieve the interval list
-        const intervalList = await retrieveIntervalList();
-        const topSymbols = await retrieveTopSymbols();
+        const intervalList = await findAllDocuments('intervals')
+        const topSymbols = await findAllDocuments('top_symbols')
 
-        // Start the websocket monitor
-        await monitorTopKline(topSymbols, intervalList);
+        updateMinionsFromTopSymbols(handleUpdateMinions)
 
         // Retrieve and store klines
         await retrieveAndStoreKlines(topSymbols, intervalList, 1000);
@@ -83,66 +90,6 @@ async function monitorTopKline(symbols, interval) {
     return Promise.resolve();
 }
 
-async function updateTopSymbolsTicker() {
-    try {
-        // Create a new Binance client with the specified API key and secret
-        const client = new Spot();
-
-        // Retrieve the ticker data for all symbols
-        const response = await client.ticker24hr();
-
-        // Sort the ticker data by quoteVolume and limit it to the top 100 symbols
-        const topSymbols = response.data
-            .sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
-            .slice(0, 100);
-
-        // Transform the ticker data into an array of dataPoints objects
-        const dataPoints = response.data.map(item => {
-            return {
-                metric: 'ticker_day',
-                tags: { symbol: item.symbol, namespace: process.env.VM_NAMESPACE },
-                fields: {
-                    priceChange: parseFloat(item.priceChange),
-                    priceChangePercent: parseFloat(item.priceChangePercent),
-                    weightedAvgPrice: parseFloat(item.weightedAvgPrice),
-                    prevClosePrice: parseFloat(item.prevClosePrice),
-                    lastPrice: parseFloat(item.lastPrice),
-                    lastQty: parseFloat(item.lastQty),
-                    bidPrice: parseFloat(item.bidPrice),
-                    bidQty: parseFloat(item.bidQty),
-                    askPrice: parseFloat(item.askPrice),
-                    askQty: parseFloat(item.askQty),
-                    openPrice: parseFloat(item.openPrice),
-                    highPrice: parseFloat(item.highPrice),
-                    lowPrice: parseFloat(item.lowPrice),
-                    volume: parseFloat(item.volume),
-                    quoteVolume: parseFloat(item.quoteVolume),
-                    openTime: item.openTime,
-                    closeTime: item.closeTime,
-                    firstId: parseInt(item.firstId),
-                    lastId: parseInt(item.lastId),
-                    count: parseInt(item.count),
-                },
-                timestamp: moment().valueOf(),
-            };
-        });
-
-        // Check the age of the latest data point for the ticker_price metric
-        const latestDataPoint = await queryLatestDataPoint('ticker_day');
-        const ageInSeconds = (moment().valueOf() - latestDataPoint.timestamp) / 1000;
-
-        // Write the dataPoints to VictoriaMetrics if the latest data point is older than 1 minute
-        if (ageInSeconds >= 60 || isNaN(ageInSeconds)) {
-            await writeData(dataPoints);
-            console.log('Top symbols ticker updated successfully');
-        } else {
-            console.log(`Skipping update - latest data point is only ${ageInSeconds} seconds old`);
-        }
-    } catch (error) {
-        // TODO: Handle the error appropriately, such as logging an error message or throwing the error
-        console.error(`Error updating top symbols ticker: ${error.message}`);
-    }
-}
 
 
 async function retrieveAndStoreKlines(symbols, intervals, count = 1000) {
@@ -186,19 +133,24 @@ async function retrieveAndStoreKlines(symbols, intervals, count = 1000) {
     await Promise.all(promises);
 }
 
-
 async function storeIntervalList() {
     try {
         // Split the comma-separated interval list into an array
-        const intervalList = process.env.INTERVAL_LIST.split(',');
+        const intervalList = process.env.INTERVALS.split(',');
 
         // Create a data point with the interval list
         const dataPoint = {
-            metric: 'interval_list',
-            value: 1,
-            tags: { namespace: process.env.VM_NAMESPACE },
+            metric:
+            {
+                "__name__": 'interval_list',
+                tags: {
+                    namespace: process.env.VM_NAMESPACE
+                },
+                job: "insert_interval_list"
+            },
+            values: [1],
             fields: { intervals: intervalList },
-            timestamp: moment().valueOf(),
+            timestamps: [moment().valueOf()],
         };
 
         // Write the data point to VictoriaMetrics
@@ -214,6 +166,4 @@ async function storeIntervalList() {
 module.exports = {
     warmUp,
     monitorTopKline,
-    updateTopSymbolsTicker,
-    intervalList
 }

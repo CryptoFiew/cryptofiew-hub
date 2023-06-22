@@ -6,57 +6,63 @@ dotenv.config();
 // Store the child processes in a map
 const childProcesses = new Map();
 
-function addWatch(symbol) {
-    console.log(`Adding watch for symbol ${symbol}`);
+function addWatch(symbols, isUserAdd=false) {
+    symbols = symbols.map(symbol => symbol.trim()); // Split the symbols string into an array and trim whitespace
 
-    // Check if a child process is already running for this symbol
-    if (childProcesses.has(symbol)) {
-        console.log(`WebSocket client process already running for symbol ${symbol}`);
-        return;
-    }
+    symbols.forEach(symbol => {
+        console.log(`Adding watch for symbol ${symbol}`);
 
-    // Execute the binance-ws.js script as a separate node process
-    const clientProcess = spawn('node', ['minion/binance-ws.js', symbol]);
-    const clientProcessId = clientProcess.pid.toString();
-    console.log(`Started WebSocket client process for symbol ${symbol}: PID ${clientProcessId}`);
+        // Check if a child process is already running for this symbol
+        if (childProcesses.has(symbol)) {
+            console.log(`WebSocket client process already running for symbol ${symbol}`);
+            return;
+        }
 
-    // Save the child process ID to Redis and the childProcesses map
-    redis.pub.lpush('minions', JSON.stringify({ exchange: 'binance', command: 'add_watch', symbol }));
-    redis.pub.hset('processes', symbol, clientProcessId);
-    childProcesses.set(symbol, clientProcess);
+        // Execute the binance-ws.js script as a separate node process
+        const clientProcess = spawn('node', ['minion/binance-ws.js', symbol]);
+        const clientProcessId = clientProcess.pid.toString();
+        console.log(`Started WebSocket client process for symbol ${symbol}: PID ${clientProcessId}`);
 
-    // Listen for the process to exit
-    clientProcess.on('exit', (code, signal) => {
-        console.log(`WebSocket client process ended for symbol ${symbol}: PID ${clientProcessId}, code ${code}, signal ${signal}`);
-        redis.pub.publish('minion_telephone_ended', JSON.stringify({ exchange: 'binance', command: 'add_watch', symbol }));
-        redis.pub.hdel('processes', symbol).then(() => {
-            console.log(`Removed process ID for symbol ${symbol} from Redis`);
-        }).catch((error) => {
-            console.error(`Failed to remove process ID from Redis: ${error.message}`);
+        // Save the child process ID to Redis and the childProcesses map
+        redis.pub.lpush('minions', JSON.stringify({ exchange: 'binance', command: 'add_watch', symbol, isUserAdd }));
+        redis.pub.hset('processes', symbol, clientProcessId);
+        childProcesses.set(symbol, clientProcess);
+
+        // Listen for the process to exit
+        clientProcess.on('exit', (code, signal) => {
+            console.log(`WebSocket client process ended for symbol ${symbol}: PID ${clientProcessId}, code ${code}, signal ${signal}`);
+            redis.pub.publish('minion_telephone_ended', JSON.stringify({ exchange: 'binance', command: 'add_watch', symbol }));
+            redis.pub.hdel('processes', symbol).then(() => {
+                console.log(`Removed process ID for symbol ${symbol} from Redis`);
+            }).catch((error) => {
+                console.error(`Failed to remove process ID from Redis: ${error.message}`);
+            });
+            childProcesses.delete(symbol);
         });
-        childProcesses.delete(symbol);
     });
 }
 
-function delWatch(symbol) {
-    console.log(`Deleting watch for symbol ${symbol}`);
+function delWatch(symbols) {
+    console.log(`Deleting watch for symbols: ${symbols.join(', ')}`);
 
-    // Check if a child process is running for this symbol
-    if (childProcesses.has(symbol)) {
-        const clientProcess = childProcesses.get(symbol);
-        const clientProcessId = clientProcess.pid.toString();
-        console.log(`Killing WebSocket client process for symbol ${symbol}: PID ${clientProcessId}`);
-        clientProcess.kill();
-        childProcesses.delete(symbol);
+    for (const symbol of symbols) {
+        // Check if a child process is running for this symbol
+        if (childProcesses.has(symbol)) {
+            const clientProcess = childProcesses.get(symbol);
+            const clientProcessId = clientProcess.pid.toString();
+            console.log(`Killing WebSocket client process for symbol ${symbol}: PID ${clientProcessId}`);
+            clientProcess.kill();
+            childProcesses.delete(symbol);
 
-        // Remove the process ID from Redis
-        redis.pub.hdel('processes', symbol).then(() => {
-            console.log(`Removed process ID for symbol ${symbol} from Redis`);
-        }).catch((error) => {
-            console.error(`Failed to remove process ID from Redis: ${error.message}`);
-        });
-    } else {
-        console.log(`No WebSocket client process running for symbol ${symbol}`);
+            // Remove the process ID from Redis
+            redis.pub.hdel('processes', symbol).then(() => {
+                console.log(`Removed process ID for symbol ${symbol} from Redis`);
+            }).catch((error) => {
+                console.error(`Failed to remove process ID from Redis: ${error.message}`);
+            });
+        } else {
+            console.log(`No WebSocket client process running for symbol ${symbol}`);
+        }
     }
 }
 
@@ -117,4 +123,5 @@ module.exports = {
     addWatch,
     delWatch,
     listWatch,
+    shutdown,
 };
