@@ -1,6 +1,6 @@
 const { redis } = require("../services/redis");
 const { addWatch, delWatch } = require("../services/commands");
-const { writeData } = require("../services/victoriametrics");
+const { writeData } = require("../services/influx");
 const moment = require("moment");
 const {Spot} = require("@binance/connector");
 

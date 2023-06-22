@@ -1,12 +1,9 @@
 const moment = require('moment');
 const { Spot } = require("@binance/connector");
-const { createMessageQueue, processMessageQueue } = require('../services/rabbitmq');
-const { writeData, checkIntervalList, retrieveIntervalList, retrieveTopSymbols} = require("../services/victoriametrics");
-const {redis} = require("../services/redis");
-const {addWatch} = require("../services/commands");
-const {createCollection, findDocuments, isCollectionEmpty, findAllDocuments} = require("../services/mongo");
+const { writeData } = require("../services/influx");
+const {createCollection, isCollectionEmpty, findAllDocuments} = require("../services/mongo");
 const {updateMinionsFromTopSymbols, handleUpdateMinions} = require("./monitor");
-require('dotenv').config();
+const env = require("../env");
 
 async function warmUp() {
     try {
@@ -38,59 +35,6 @@ async function warmUp() {
     }
 }
 
-async function monitorTopKline(symbols, interval) {
-    // Connect to RabbitMQ and create a message queue for the kline data
-
-    // Connect to the Binance WebSocket API for the top symbols' klines
-    const ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${symbols.map(symbol => `${symbol.toLowerCase()}@kline_${intervals.join('/')}`).join('/')}`);
-
-    // Write the kline data to VictoriaMetrics
-    ws.on('message', async data => {
-        const kline = JSON.parse(data).data.k;
-        const symbol = kline.s;
-        const interval = kline.i;
-        const openTime = kline.t;
-        const open = kline.o;
-        if (!intervals.includes(interval)) {
-            return;
-        }
-        const dataPoints = [
-            {
-                metric: 'klines',
-                timestamp: moment(openTime).valueOf(),
-                value: parseFloat(open),
-                tags: { symbol, interval, namespace: process.env.VM_NAMESPACE }
-            }
-        ];
-        await writeData(dataPoints);
-        const message = JSON.stringify({ symbol, interval, openTime, open });
-        createMessageQueue(channel, 'kline', Buffer.from(message));
-    });
-
-    // Process the kline data from the message queue and write it to VictoriaMetrics
-    const messageQueuePromises = intervalList.flatMap(interval => {
-        return topSymbols.map(symbol => {
-            return processMessageQueue(channel, 'kline', async message => {
-                const { symbol, interval, openTime, open } = JSON.parse(message.content.toString());
-                const dataPoints = [
-                    {
-                        metric: 'kline',
-                        timestamp: moment(openTime).valueOf(),
-                        value: parseFloat(open),
-                        tags: { symbol, interval, namespace: process.env.VM_NAMESPACE }
-                    }
-                ];
-                await writeData(dataPoints);
-            });
-        });
-    });
-    await Promise.all(messageQueuePromises);
-
-    // Return a Promise that resolves when all the kline data has been written to VictoriaMetrics
-    return Promise.resolve();
-}
-
-
 
 async function retrieveAndStoreKlines(symbols, intervals, count = 1000) {
     if (count > 1000) count = 1000;
@@ -105,19 +49,19 @@ async function retrieveAndStoreKlines(symbols, intervals, count = 1000) {
                 const dataPoints = response.data.map(kline => {
                     return {
                         metric: 'kline',
-                        tags: { symbol, interval, namespace: process.env.VM_NAMESPACE },
-                        fields: {
-                            open: parseFloat(kline[1]),
-                            high: parseFloat(kline[2]),
-                            low: parseFloat(kline[3]),
-                            close: parseFloat(kline[4]),
-                            volume: parseFloat(kline[5]),
-                            quoteAssetVolume: parseFloat(kline[7]),
-                            numberOfTrades: parseInt(kline[8]),
-                            takerBuyBaseAssetVolume: parseFloat(kline[9]),
-                            takerBuyQuoteAssetVolume: parseFloat(kline[10]),
-                        },
-                        timestamp: moment(kline[0]).valueOf(),
+                        tags: { symbol, interval },
+                        values: [
+                            parseFloat(kline[1]), // open
+                            parseFloat(kline[2]), // high
+                            parseFloat(kline[3]), // low
+                            parseFloat(kline[4]), // close
+                            parseFloat(kline[5]), // volume
+                            parseFloat(kline[7]), // quoteAssetVolume
+                            parseInt(kline[8]),   // numberOfTrades
+                            parseFloat(kline[9]), // takerBuyBaseAssetVolume
+                            parseFloat(kline[10]),// takerBuyQuoteAssetVolume
+                        ],
+                        timestamps: [moment(kline[0]).valueOf() / 1000], // convert to seconds
                     };
                 });
 
@@ -129,14 +73,15 @@ async function retrieveAndStoreKlines(symbols, intervals, count = 1000) {
         await Promise.all(dataPointsPromises);
     });
 
-    // Wait for all the kline data to be written to VictoriaMetrics
+    // Wait for all the kline data to be written to InfluxDB
     await Promise.all(promises);
+    console.log('All history data is stored inside influx DB');
 }
 
 async function storeIntervalList() {
     try {
         // Split the comma-separated interval list into an array
-        const intervalList = process.env.INTERVALS.split(',');
+        const intervalList = env.klineIntervals;
 
         // Create a data point with the interval list
         const dataPoint = {
@@ -144,7 +89,7 @@ async function storeIntervalList() {
             {
                 "__name__": 'interval_list',
                 tags: {
-                    namespace: process.env.VM_NAMESPACE
+                    namespace: env.influxBucket
                 },
                 job: "insert_interval_list"
             },
@@ -165,5 +110,4 @@ async function storeIntervalList() {
 
 module.exports = {
     warmUp,
-    monitorTopKline,
 }

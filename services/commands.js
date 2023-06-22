@@ -1,7 +1,5 @@
 const { spawn } = require('child_process');
 const { redis } = require('./redis');
-const dotenv = require('dotenv');
-dotenv.config();
 
 // Store the child processes in a map
 const childProcesses = new Map();
@@ -14,7 +12,6 @@ function addWatch(symbols, isUserAdd=false) {
 
         // Check if a child process is already running for this symbol
         if (childProcesses.has(symbol)) {
-            console.log(`WebSocket client process already running for symbol ${symbol}`);
             return;
         }
 
@@ -38,7 +35,30 @@ function addWatch(symbols, isUserAdd=false) {
                 console.error(`Failed to remove process ID from Redis: ${error.message}`);
             });
             childProcesses.delete(symbol);
+
         });
+        // Start the hopper-mq.js script if there is only one child process running
+        // Execute the binance-ws.js script as a separate node process
+        if (childProcesses.size === 1 && !childProcesses.get('hopper-mq')){
+            const hopperProcess = spawn('node', ['minion/hopper-mq.js', symbol]);
+            const hopperProcessId = clientProcess.pid.toString();
+            childProcesses.set('hopper', hopperProcess)
+            console.log(`Starting hopper-mq.js with PID ${hopperProcessId}`);
+            redis.pub.hset('processes', 'hopper', hopperProcessId);
+            redis.pub.lpush('minions', JSON.stringify({ exchange: 'nil', command: 'start_hopper', pid: hopperProcessId }));
+
+            // Listen for the process to exit
+            hopperProcess.on('exit', (code, signal) => {
+                console.log(`Hopper: The job is done. PID ${hopperProcessId}, code ${code}, signal ${signal}`);
+                redis.pub.publish('minion_telephone_ended', JSON.stringify({ exchange: 'nil', command: 'stop_hopper', pid: hopperProcess }));
+                redis.pub.hdel('processes', 'hopper').then(() => {
+                    console.log(`Removed Hopper's process ID from Redis`);
+                }).catch((error) => {
+                    console.error(`Failed to remove process ID from Redis: ${error.message}`);
+                });
+                childProcesses.delete('hopper');
+            });
+        }
     });
 }
 
@@ -77,6 +97,7 @@ function listWatch() {
     const watchesJson = JSON.stringify(watches);
     redis.pub.publish('minion_telephone', watchesJson);
 }
+
 
 // Handle SIGINT and SIGTERM signals
 function shutdown() {
