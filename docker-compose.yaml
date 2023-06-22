@@ -24,17 +24,22 @@ services:
     volumes:
       - cp-redis:/data
 
-  cp-vm:
-    command: ["-retentionPeriod=720h"]
-    image: victoriametrics/victoria-metrics
+    # InfluxDB - Database for sensor data
+  cp-influx:
+    image: influxdb:latest
+    container_name: influxdb
+    networks:
+      - default
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
     ports:
-      - "8428:8428"
+      - "8086:8086"
     volumes:
-      - cp-vm:/victoria-metrics-data
-
+      - cp-influx:/var/lib/influxdb2
 volumes:
   cp-rabbit:
   cp-redis:
-  cp-vm:
+  cp-influx:
 
 

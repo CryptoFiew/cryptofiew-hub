@@ -4,7 +4,7 @@
 
 Due to author's ADHD, it is possible that this project may progress at a slower pace than other similar projects. 
 
-Crypto Pulse Minions is a project that uses Node.js and Redis to manage WebSocket client processes for monitoring cryptocurrency prices on various exchanges.
+Crypto Pulse Minions is a project that uses Node.js, Redis, MongoDB, InfluxDB and RabbitMQ to manage WebSocket client processes for monitoring cryptocurrency prices on various exchanges.
 
 This program should acting like a minion hub for other system to utilise its functionality.
 
@@ -14,13 +14,13 @@ To use Crypto Pulse Minions, you'll need to have the following installed on your
 * Node.js (https://nodejs.org/)
 * Redis (https://redis.io/)
 * MongoDB (https://mongodb.com/)
-* VictoriaMetric (https://victoriametrics.com/)
+* InfluxDB (https://www.influxdata.com/)
 * RabbitMQ (https://www.rabbitmq.com/)
 
 ## Installation
 
 To use Crypto Pulse Minions, you can follow these steps:
-1. Install Docker and Docker Compose on your machine.
+1. Install [Docker](https://docker.com/) and [Docker Compose](https://docs.docker.com/compose/install/) on your machine.
 2. Clone this repository to your local machine:
 ```bash
 $ git clone https://github.com/stockfiew/crypto-pulse-minions.git
@@ -43,6 +43,7 @@ For easier deployment and lower the knowledge requirement to run this system, hi
 
 ```bash
 $ docker compose build
+$ docker compose pull
 $ docker compose up -d
 ```
 
@@ -54,22 +55,17 @@ To use Crypto Pulse Minions, you'll need to have RabbitMQ, VictoriaMetrics and R
 
 - [https://www.rabbitmq.com/download.html](https://www.rabbitmq.com/download.html)
 
-If you want to have more depth understanding about what is RabbitMQ, there is an article explain how RabbitMQ function quite [clearly](https://www.cloudamqp.com/blog/part1-rabbitmq-for-beginners-what-is-rabbitmq.html)
-
 #### MongoDB
 
 - [https://www.mongodb.com/docs/manual/tutorial/getting-started/](https://www.mongodb.com/docs/manual/tutorial/getting-started/)
 
-#### VictoriaMetrics
-- [https://github.com/VictoriaMetrics/VictoriaMetrics](https://github.com/VictoriaMetrics/VictoriaMetrics)
+#### InfluxDB
+- [https://github.com/influxdata/influxdb](https://github.com/influxdata/influxdb)
 
-More depth reading about VictoriaMetrics: [What makes VictoriaMetrics the new de-facto standard choice?](https://medium.com/everything-full-stack/what-makes-victoriametrics-the-new-de-facto-standard-choice-for-open-source-monitoring-5d2b66b6e292)
 
 #### Redis
 
 - [https://redis.io/docs/getting-started/](https://redis.io/docs/getting-started/)
-
-More depth reading about Redis: [What is Redis what it does and why you should care](https://backendless.com/redis-what-it-is-what-it-does-and-why-you-should-care/)
 
 ```bash
 $ node index.js
