@@ -1,65 +1,66 @@
 const { InfluxDB, Point } = require('@influxdata/influxdb-client');
-const env = require('../env');
+const { influxUrl, influxToken, influxOrg, influxBucket } = require('../env');
+const { error } = require("../utils/logger");
 
 // Create a new InfluxDB client instance
-const influx = new InfluxDB({
-    url: env.influxUrl,
-    token: env.influxToken,
-});
+const influx = new InfluxDB({ url: influxUrl, token: influxToken });
+const writeApi = influx.getWriteApi(influxOrg, influxBucket);
 
-function writeData(dataPoints) {
-    const influxDB = new InfluxDB({ url: env.influxUrl, token: env.influxToken });
-    const writeApi = influxDB.getWriteApi(env.influxOrg, env.influxBucket);
+/**
+ * Writes data points to InfluxDB.
+ * @param {Point[]} points - The data points to write.
+ * @returns {Promise<void>} - A promise that resolves when the write is complete.
+ */
+function writeData(points) {
+	writeApi.useDefaultTags({ region: 'au' });
 
-    writeApi.useDefaultTags({ region: 'west' });
+	points.forEach((point) => {
+		writeApi.writePoint(point);
+	});
 
-    dataPoints.forEach((dataPoint) => {
-        const point = new Point(dataPoint.metric)
-            .tag(dataPoint.tags)
-            .floatField('value', dataPoint.values[0])
-            .timestamp(new Date(dataPoint.timestamps[0] * 1000));
-        console.log(point.toString());
-        writeApi.writePoint(point);
-    });
-
-    return writeApi.close().then(() => {
-        console.log('WRITE FINISHED');
-    }).catch((error) => {
-        throw new Error(`Error writing data to InfluxDB: ${error.message}`);
-    });
+	return writeApi.close();
 }
 
-// Query data from InfluxDB
+/**
+ * Queries data from InfluxDB using the specified query.
+ * @param {string} query - The InfluxQL query to execute.
+ * @returns {Promise<object[]>} - A promise that resolves with an array of query results.
+ */
 function queryData(query) {
-    const queryApi = influx.getQueryApi(env.influxOrg);
-    return queryApi.collectRows(query);
+	const queryApi = influx.getQueryApi(influxOrg);
+	return queryApi.collectRows(query);
 }
 
-// Query the latest data point for a metric from InfluxDB
+/**
+ * Queries the latest data point for the specified metric from InfluxDB.
+ * @param {string} metric - The metric to query the latest data point for.
+ * @returns {Promise<object>} - A promise that resolves with an object containing the timestamp, symbol, and interval of the latest data point.
+ */
 function queryLatestDataPoint(metric) {
-    const query = `
-    from(bucket: "${env.influxBucket}")
+	const query = `
+    from(bucket: "${influxBucket}")
       |> range(start: -1h)
       |> filter(fn: (r) => r._measurement == "${metric}")
       |> last()
   `;
-    return queryData(query)
-        .then((result) => {
-            const dataPoint = result[0];
-            return {
-                timestamp: new Date(dataPoint._time).getTime(),
-                symbol: dataPoint.symbol,
-                interval: dataPoint.interval,
-            };
-        })
-        .catch((error) => {
-            console.error(`Error querying latest data point for metric ${metric}: ${error.message}`);
-            throw error;
-        });
+
+	return queryData(query)
+		.then((result) => {
+			const dataPoint = result[0];
+			return {
+				timestamp: new Date(dataPoint._time).getTime(),
+				symbol: dataPoint.symbol,
+				interval: dataPoint.interval,
+			};
+		})
+		.catch((err) => {
+			error(`Error querying latest data point for metric ${metric}: ${err.message}`);
+			throw err;
+		});
 }
 
 module.exports = {
-    writeData,
-    queryData,
-    queryLatestDataPoint,
+	writeData,
+	queryData,
+	queryLatestDataPoint,
 };

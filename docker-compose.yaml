@@ -4,18 +4,28 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env.docker
+    networks:
+      - cp-network
     depends_on:
       - cp-rabbit
-    env_file:
-      - .env
 
   cp-rabbit:
     image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_PLUGINS: rabbitmq_management
     ports:
       - "5672:5672"
       - "15672:15672"
     volumes:
       - cp-rabbit:/var/lib/rabbitmq
+    networks:
+      - cp-network
+    depends_on:
+      - cp-redis
 
   cp-redis:
     image: redis:latest
@@ -23,13 +33,12 @@ services:
       - "6379:6379"
     volumes:
       - cp-redis:/data
+    networks:
+      - cp-network
 
-    # InfluxDB - Database for sensor data
   cp-influx:
     image: influxdb:latest
     container_name: influxdb
-    networks:
-      - default
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -37,9 +46,15 @@ services:
       - "8086:8086"
     volumes:
       - cp-influx:/var/lib/influxdb2
+    networks:
+      - cp-network
+    depends_on:
+      - cp-redis
+
 volumes:
   cp-rabbit:
   cp-redis:
   cp-influx:
 
-
+networks:
+  cp-network:
