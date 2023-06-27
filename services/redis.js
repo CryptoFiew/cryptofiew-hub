@@ -39,6 +39,7 @@ const removeFromList = (key, ...items) => {
   });
 }
 
+
 const getList = async (key) => {
 	logger.debug(pubClient.status)
 	try {
@@ -69,6 +70,14 @@ const lPop = (key, length) => {
 		return 0;
 	}
 }
+
+const lRem = async (key, values) => {
+	for (const value of values) {
+		const numRemoved = await pubClient.lrem(key, 0, value);
+		logger.info(`Removed ${numRemoved} occurrencess of ${value} from list ${key}`)
+	}
+}
+
 // Handle Redis connection errors
 pubClient.on('error', (err) => {
     logger.error(`Error connecting to Redis: ${err}`);

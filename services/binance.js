@@ -74,7 +74,7 @@ function connect() {
 function unsubscribe(wsStream, symbol, intervals) {
 	wsStream.unsubscribe(symbol);
 	// Find and delete the connection string from the list
-	redis.remove(env, redisWebSockets, symbol);
+	redis.remove(env.redisWebSockets, symbol);
 
 	for (const interval of intervals) {
 		wsStream.unsubscribe(symbol, interval);
@@ -90,11 +90,7 @@ function unsubscribe(wsStream, symbol, intervals) {
  */
 function subscribe(wsStream, symbol, intervals) {
 	wsStream.trade(symbol);
-	redis.pub.lpush(env.redisWebSockets, symbol, (error, result) => {
-		if (error) {
-			logger.error(`Error when insert symbol to Redis: ${error}`);
-		}
-	});
+	redis.lPush(env.redisWebSockets, [symbol]);
 
 	for (const interval of intervals) {
 		//wsStream.kline(symbol, interval);
@@ -107,17 +103,17 @@ function subscribe(wsStream, symbol, intervals) {
  * @param {string} symbol - The symbol to disconnect from.
  */
 function disconnect(symbol) {
-	redis.pub.lrange(env.redisWebSockets, 0, -1, (error, result) => {
-		if (error) {
-			console.error(error);
-		} else {
-			result.forEach((value) => {
-				if (value === symbol) {
-					unsubscribe(wsStream, value);
-				}
-			});
-			logger.debug(`Unsubscribed: ${result}`);
-		}
+	redis.getList(env.redisWebSockets)
+		.then((result) => {
+		result.forEach((value) => {
+			if (value === symbol) {
+				unsubscribe(wsStream, value);
+			}
+		});
+		logger.debug(`Unsubscribed: ${result}`);
+	})
+		.catch((error) => {
+		logger.error(error)
 	});
 }
 
@@ -125,16 +121,16 @@ function disconnect(symbol) {
  * Disconnect from all WebSocket streams and remove them from the connection pool.
  */
 function disconnectAll() {
-	redis.pub.lrange(env.redisWebSockets, 0, -1, (error, result) => {
-		if (error) {
-			console.error(error);
-		} else {
+	redis.getList(env.redisWebSockets)
+		.then((result) => {
 			result.forEach((value) => {
 				unsubscribe(wsStream, value);
 			});
 			logger.debug(`Unsubscribed: ${result}`);
-		}
-	});
+		})
+		.catch((error) => {
+			logger.error(error);
+		})
 }
 
 /**
@@ -199,7 +195,7 @@ function processTrade (trade) {
   });
 
 	// Publish the trade object, high and low prices to Redis
-	const channelName = `trade:${trade.s}:binance`;
+	const channelName = `trade:${trade.s.toLowerCase()}:binance`;
 	const scoreValue = JSON.stringify(tradeObject);
 	const cutoff = Date.now() - 60 * 60 * 1000;
 
@@ -219,8 +215,8 @@ function processTrade (trade) {
 						interval,
 						price: lowPrices[interval],
 					});
-					const highPriceChannel = `high:${interval}:${trade.s}:binance`;
-					const lowPriceChannel = `low:${interval}:${trade.s}:binance`;
+					const highPriceChannel = `high:${interval}:${trade.s.toLowerCase()}:binance`;
+					const lowPriceChannel = `low:${interval}:${trade.s.toLowerCase()}:binance`;
 
 					redis.pub
 						.pipeline()
@@ -296,7 +292,7 @@ function processKline(kline) {
 	});
 
 	// Publish the Kline object to Redis
-	const channelName = `kline:${klineData.s}:${klineData.i}:binance`;
+	const channelName = `kline:${klineData.s.toLowerCase()}:${klineData.i}:binance`;
 	const scoreValue = JSON.stringify(klineObject);
 	const cutoff = Date.now() - 60 * 60 * 1000;
 
