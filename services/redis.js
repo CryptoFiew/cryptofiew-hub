@@ -6,11 +6,10 @@ const redisConfig = {
     host: env.redisHost,
     port: env.redisPort,
     password: env.redisPass || null,
-		enableAutoPipelining: true,
 };
 
 const pubClient = new Redis(redisConfig);
-const subClient = pubClient.duplicate();
+const subClient = new Redis(redisConfig);
 
 /**
  * Removes items from a Redis list by value.
@@ -22,40 +21,72 @@ const subClient = pubClient.duplicate();
 const removeFromList = (key, ...items) => {
   pubClient.lrange(key, 0, -1, (error, result) => {
     if (error) {
-      console.error(error);
+      logger.error(error);
     } else {
       const itemsToRemove = result.filter((item) => items.includes(item));
       if (itemsToRemove.length > 0) {
         pubClient.lrem(key, itemsToRemove.length, ...itemsToRemove, (error, result) => {
           if (error) {
-            console.error(error);
+            logger.error(error);
           } else {
-            console.log(`Removed ${result} items from list ${key}: \n${itemsToRemove}`);
+            logger.debug(`Removed ${result} items from list ${key}: ${itemsToRemove}`);
           }
         });
       } else {
-        console.log(`No items found in list ${key}: \n${items}`);
+        logger.debug(`No items found in list ${key}: ${items}`);
       }
     }
   });
 }
 
+const getList = async (key) => {
+	logger.debug(pubClient.status)
+	try {
+		return await pubClient.lrange(key, 0, -1, (error, result) => {
+			logger.debug(JSON.stringify(result));
+			return result;
+		});
+	} catch (error) {
+		logger.error(error);
+		return [];
+	}
+};
 
+const lPush = (key, values) => {
+	try {
+		return pubClient.lpush(key, values);
+	} catch (error) {
+		logger.error(error);
+		return 0;
+	}
+}
+
+const lPop = (key, length) => {
+	try {
+		return pubClient.lpop(key, length);
+	} catch(error) {
+		logger.error(error)
+		return 0;
+	}
+}
 // Handle Redis connection errors
 pubClient.on('error', (err) => {
-    logger.error(`Error connecting to Redis: \n${err}`);
+    logger.error(`Error connecting to Redis: ${err}`);
 });
 
 subClient.on('error', (err) => {
-    logger.error(`Error connecting to Redis: \n${err}`);
+    logger.error(`Error connecting to Redis: ${err}`);
 });
 
 
 
 module.exports = {
-    redis: {
-        pub: pubClient,
-        sub: subClient,
-        remove: removeFromList,
-    },
+  redis: {
+    pub: pubClient,
+    sub: subClient,
+		lPush,
+		lPop,
+    getList,
+    remove: removeFromList,
+  },
 };

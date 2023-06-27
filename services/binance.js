@@ -116,8 +116,7 @@ function disconnect(symbol) {
 					unsubscribe(wsStream, value);
 				}
 			});
-			logger.debug(`Unsubscribed:
-            ${result}`);
+			logger.debug(`Unsubscribed: ${result}`);
 		}
 	});
 }
@@ -133,8 +132,7 @@ function disconnectAll() {
 			result.forEach((value) => {
 				unsubscribe(wsStream, value);
 			});
-			logger.debug(`Unsubscribed:
-            ${result}`);
+			logger.debug(`Unsubscribed: ${result}`);
 		}
 	});
 }

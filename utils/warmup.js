@@ -22,16 +22,15 @@ async function warmUp() {
 
 	try {
 		// Initialize MongoDB
-    const intervalList = await mongoWarmUp();
+    await mongoWarmUp();
     logger.info('MongoDB initialized successfully.');
 
     // Update top symbols
     const topSymbols = await updateTopSymbolsTicker();
-    logger.info(`Top symbols updated: 
-    ${topSymbols}`);
+    logger.info(`Top symbols updated: ${JSON.stringify(topSymbols)}`);
 
     // Retrieve and store klines
-    await retrieveAndStoreKlines(topSymbols, intervalList, 1000);
+    await retrieveAndStoreKlines(topSymbols, 1000);
     logger.info('Klines retrieved and stored successfully.');
 
 		// Start hopper process
@@ -39,8 +38,7 @@ async function warmUp() {
 		logger.info('Hopper started successfully.');
 
   } catch (error) {
-      logger.error(`Error during warm-up: 
-      ${error.message}`);
+      logger.error(`Error during warm-up: ${error.message}`);
   }
 }
 
@@ -50,6 +48,7 @@ async function warmUp() {
  * @returns {Array<string>} The list of intervals.
  */
 async function mongoWarmUp() {
+	let returnIntervals;
 	await mongo.connect();
   const intervals = env.klinesIntervals;
 
@@ -58,51 +57,41 @@ async function mongoWarmUp() {
   logger.debug('Created or found "intervals" collection in MongoDB.');
 
   // Flush Redis
-  await redis.pub.flushdb((error, result) => {
+  await redis.pub.flushdb('SYNC', (error, result) => {
       if (error) {
-          logger.error(`Error flushing Redis: 
-          ${error.message}`);
+          logger.error(`Error flushing Redis: ${error.message}`);
       } else {
-          logger.info(`Flushed Redis: 
-          ${result}`);
+          logger.info(`Flushed Redis: ${result}`);
       }
   });
 
   // Update the interval list in MongoDB
   const intervalListEmpty = await mongo.isEmpty('intervals');
-  const currentIntervals = await mongo.getContents('intervals');
+  const mongoIntervals = await mongo.getContents('intervals');
+	const currentIntervals = mongoIntervals.map((item) => (item.interval));
+	logger.debug(`currentIntervals: \n${JSON.stringify(currentIntervals)}`)
 
   if (intervalListEmpty || !arraysEqual(intervals, currentIntervals)) {
-      logger.debug('Updating interval list in MongoDB.');
-      await mongo.purge('intervals');
-      await mongo.inserts('intervals', intervals.map(interval => ({ interval })));
-  } else {
-      logger.info('Skipping update - interval list has not changed.');
-  }
+    logger.debug('Updating interval list in MongoDB.');
+    await mongo.purge('intervals');
+    await mongo.inserts('intervals', intervals.map(interval => ({ interval })));
+		// Update the interval list in Redis
+		logger.debug(`Setting new intervals to key ${env.redisIntervals}`);
+		logger.debug(`[C] Setting return intervals: ${intervals}`);
+		returnIntervals = intervals;
+	} else {
+		logger.debug(`[N] Setting return intervals: ${JSON.stringify(currentIntervals)}`);
+		returnIntervals = currentIntervals;
+		logger.info('Skipping update - interval list has not changed.');
+	}
 
-  // Update the interval list in Redis
-  const intervalHash = intervals.reduce((hash, interval) => {
-      hash[interval] = env.redisIntervals;
-      return hash;
-  }, {});
-
-  logger.debug(`Interval: \n${JSON.stringify(Object.keys(intervalHash))}`);
-  redis.pub.hmset(env.redisIntervals, intervalHash, (error, result) => {
-      if (error) {
-          logger.error(`Error updating interval list in Redis: 
-          ${error.message}`);
-      } else {
-          logger.info(`Updated interval list in Redis: 
-          ${result}`);
-      }
-  });
-
-  // Publish the interval list to the 'intervals' channel
+	// Publish the interval list to the 'intervals' channel
   const channel = env.redisMinionChan;
 	const message = { type: 'intervals', data: intervals }
 	redis.pub.publish(channel, JSON.stringify(message));
-
-  return intervals;
+	logger.info(`Publish new intervals list to ${env.redisMinionChan}`)
+	redis.lPop(env.redisIntervals, 20);
+	redis.lPush(env.redisIntervals, returnIntervals);
 }
 
 /**
@@ -111,16 +100,18 @@ async function mongoWarmUp() {
  * @param {Array<string>} intervals - The list of intervals to retrieve klines for.
  * @param {number} [count=1000] - The maximum number of klines to retrieve for each symbol and interval.
  */
-async function retrieveAndStoreKlines(symbols, intervals) {
+async function retrieveAndStoreKlines(symbols) {
+
+	logger.debug(`Retrieve Symbols as parameter: ${JSON.stringify(symbols)}`);
+	const intervals = await redis.getList(env.redisIntervals)
+	logger.debug(`Retrieve Intervals from Redis: ${intervals}`)
 	const klinesIntervals = calculateKlines(intervals, 30);
+	logger.debug(`Kline count results: ${JSON.stringify(klinesIntervals)}`)
 
-	logger.debug(JSON.stringify(klinesIntervals))
-	symbols.map((symbol) => logger.debug(symbol))
-	logger.debug(intervals)
-
-	const dataPointsPromises = [].concat(...symbols.forEach((symbol) =>
-		Object.entries(klinesIntervals).map(([interval, limit]) =>
-			client.klines(symbol, interval, { limit: limit })
+	const dataPointsPromises = [];
+	symbols.forEach((symbol) => {
+		Object.entries(klinesIntervals).forEach(([interval, limit]) => {
+			dataPointsPromises.push(client.klines(symbol, interval, { limit: limit })
 				.then((response) => {
 					return response.data.map((kline) =>
 						new Point(`${symbol}_${interval}`)
@@ -139,15 +130,20 @@ async function retrieveAndStoreKlines(symbols, intervals) {
 							.timestamp(new Date(kline[0]))
 					);
 				})
-		)
-	));
+			);
+		});
+	});
 
   try {
-      await Promise.all(writeData(dataPointsPromises));
-      logger.debug('All kline data is stored in InfluxDB.');
+		Promise.all(dataPointsPromises)
+			.then((dp) => {
+				const allDataPoints = [].concat(...dp)
+				writeData((allDataPoints))
+			})
+    logger.debug('All kline data is stored in InfluxDB.');
   } catch (error) {
-      logger.error(`Error retrieving or storing kline data: 
-      ${error.message}`);
+    logger.error(`Error retrieving or storing kline data: 
+    ${error.message}`);
   }
 }
 

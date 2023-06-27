@@ -18,7 +18,7 @@ async function updateTopSymbolsTicker() {
         const client = new Spot();
         // Retrieve the ticker data for all symbols
         const response = await client.ticker24hr();
-				logger.debug(`Response from 24h ticker: \n${response}`)
+				logger.debug(`Response from 24h ticker: ${JSON.stringify(response.data.length)}`)
         if (!response.data) {
             logger.error('Error retrieving ticker data.');
             return Promise.reject(new Error('Error retrieving ticker data.'));
@@ -57,6 +57,7 @@ async function updateTopSymbolsTicker() {
             .floatField('quoteVolume', parseFloat(item.quoteVolume))
             .timestamp(new Date(item.closeTime));
         });
+
         // Write the ticker data to InfluxDB
         return await writeData(points).then(() => {
           logger.debug('Updated top symbols ticker successfully.');
@@ -75,27 +76,19 @@ async function updateTopSymbolsTicker() {
  * @returns {Promise<Array<string>>} The updated list of top symbols.
  */
 async function processTopSymbols(symbols) {
-	logger.debug(`processTopSymbols: \n${symbols}`);
+	logger.debug(`processTopSymbols: ${symbols}`);
   try {
     // Retrieve the top symbols list from Redis
-		const topSymbols = await redis.pub.lrange(env.redisTopSymbols, 0, -1)
-		// continue with the rest of your code that uses topSymbols
-		logger.debug(topSymbols);
-		if (!topSymbols) {
-			logger.warn('Error retrieving top symbols from Redis.');
-			return [];
-		}
-
-    logger.debug(`Top symbols retrieved from Redis: \n${topSymbols}`);
+		const topSymbols = await redis.getList(env.redisTopSymbols);
 
     // Compare the top symbols list to the current list of symbols and determine which symbols to add or remove
     const symbolsToAdd = symbols.filter(symbol => !topSymbols.includes(symbol));
     const symbolsToRemove = topSymbols.filter(symbol => !(symbols.includes(symbol)));
-    logger.debug(`symbolsToAdd: \n${symbolsToAdd} \nsymbolsToRemove: \n${symbolsToRemove}`);
+    logger.debug(`symbolsToAdd: \n${JSON.stringify(symbolsToAdd)} \nsymbolsToRemove: \n${JSON.stringify(symbolsToRemove)}`);
 
     // Add or remove symbols from the watch list
     if (symbolsToAdd.length > 0) {
-      symbolsToAdd.forEach((item) => redis.pub.lpush(env.redisTopSymbols, item));
+      redis.lPush(env.redisTopSymbols, symbolsToAdd);
       addWatch(symbolsToAdd); // Set isUserAdded flag to true for symbols added by the user
     }
     if (symbolsToRemove.length > 0) {
@@ -103,17 +96,7 @@ async function processTopSymbols(symbols) {
       delWatch(symbolsToRemove);
     }
 
-		return redis.pub.pipeline()
-			.lrange(env.redisTopSymbols, 0, -1)
-			.exec()
-/*
-		return redis.pub.lrange(env.redisTopSymbols, 0, -1, (err, res) => {
-			if (err) {
-				logger.error(`Error when retrieving ${env.redisTopSymbols} from Redis \n${err}`);
-			}
-			return res;
-		});
-*/
+		return await redis.getList(env.redisTopSymbols);
 	} catch (error) {
 		logger.error(`Error processing top symbols: ${error.message}`);
       throw error;

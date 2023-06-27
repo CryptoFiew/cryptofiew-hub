@@ -11,10 +11,9 @@ const logger = require("../utils/logger");
  */
 async function addWatch(symbols) {
 	try {
-		const intervals = await redis.pub.hgetall(redisIntervals);
-		const intervalKeys = Object.keys(intervals);
+		const intervals = await redis.getList(redisIntervals);
 
-		const watchIntervals = intervalKeys.length ? intervalKeys : klinesIntervals;
+		const watchIntervals = intervals.length ? intervals : klinesIntervals;
 
 		symbols.forEach(symbol => {
 			if (webSocket.isSubscribed(symbol)) {
