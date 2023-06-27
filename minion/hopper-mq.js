@@ -39,7 +39,7 @@ hopper.on('connect', () => {
 
 // Log errors when the hopper disconnects from RabbitMQ
 hopper.on('disconnect', (err) => {
-	logger.error('Disconnected from RabbitMQ', err.stack);
+	logger.error(`Hopper disconnected from RabbitMQ: ${JSON.stringify(err)}`);
 });
 
 /**
@@ -95,8 +95,9 @@ function startWorkerProcess(callback) {
 
 	// Define the main function
 	function main() {
-		return hopperChan.consume(env.wsBinance, handleMessage, { noAck: true });
-		//return rabbit.consumeQueuePromise(env.wsBinance, handleMessage)
+    //rabbit.consumeQueue(env.wsBinance, handleMessage)
+    //rabbit.consumeQueuePromise(env.wsBinance, handleMessage)
+    hopperChan.consume(env.wsBinance, handleMessage, { noAck: true })
 	}
 
 	// Define the worker process object
