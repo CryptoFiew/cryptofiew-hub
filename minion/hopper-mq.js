@@ -1,10 +1,9 @@
 const { writeData } = require('../services/influx');
 const { Point } = require("@influxdata/influxdb-client");
 const amqp = require("amqp-connection-manager");
-const rabbit = require('../services/rabbitmq');
 const env = require("../env");
 const logger = require("../utils/logger");
-let workerProcesses = []; // An array to hold worker process objects
+const workerProcesses = []; // An array to hold worker process objects
 let [successKlines, successTrades, failedKlines, failedTrades] = [0, 0, 0, 0]; // Variables for tracking message statuses
 
 /**

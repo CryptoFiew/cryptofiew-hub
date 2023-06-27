@@ -3,7 +3,6 @@ const { redis } = require('../services/redis');
 const rabbit = require("./rabbitmq");
 const logger = require('../utils/logger');
 const env = require("../env");
-const { redisWebSockets } = require("../env");
 
 
 // Define callbacks for handling WebSocket stream events

@@ -1,6 +1,5 @@
 const { redis } = require('./redis');
 const { webSocket } = require("./binance");
-const { debug, error } = require("../utils/logger");
 const { redisIntervals, klinesIntervals } = require("../env");
 const rabbit = require("./rabbitmq");
 const logger = require("../utils/logger");
@@ -20,14 +19,14 @@ async function addWatch(symbols) {
 				return;
 			}
 
-			debug(`Adding watch for symbol ${symbol}`);
+			logger.debug(`Adding watch for symbol ${symbol}`);
 			webSocket.connect()
 				.then((stream) => {
 					webSocket.subscribe(stream, symbol, watchIntervals);
 				});
 		});
 	} catch (err) {
-		error(`Error getting intervals hash: ${err.message}`);
+		logger.error(`Error getting intervals hash: ${err.message}`);
 	}
 }
 
@@ -36,14 +35,14 @@ async function addWatch(symbols) {
  * @param {string[]} symbols - The symbols to delete the watch for.
  */
 function delWatch(symbols) {
-	debug(`Deleting watch for symbols: ${symbols.join(', ')}`);
+	logger.debug(`Deleting watch for symbols: ${symbols.join(', ')}`);
 
 	for (const symbol of symbols) {
 		if (webSocket.isSubscribed(symbol)) {
-			debug(`Killing WebSocket client process for symbol ${symbol}`);
+			logger.debug(`Killing WebSocket client process for symbol ${symbol}`);
 			webSocket.disconnect(symbol);
 		} else {
-			debug(`No WebSocket client process running for symbol ${symbol}`);
+			logger.debug(`No WebSocket client process running for symbol ${symbol}`);
 		}
 	}
 }
@@ -52,7 +51,7 @@ function delWatch(symbols) {
  * Shuts down the application.
  */
 function shutdown() {
-	debug('Shutting down...');
+	logger.debug('Shutting down...');
 	setTimeout(() => webSocket.disconnectAll(), 5_000);
 	rabbit.disposeConnection().then(() => {
 		console.log('Disconnected from RabbitMQ');
