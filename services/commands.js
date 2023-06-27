@@ -3,6 +3,7 @@ const { webSocket } = require("./binance");
 const { debug, error } = require("../utils/logger");
 const { redisIntervals, klinesIntervals } = require("../env");
 const rabbit = require("./rabbitmq");
+const logger = require("../utils/logger");
 
 /**
  * Adds a watch for the specified symbols.
@@ -41,7 +42,7 @@ function delWatch(symbols) {
 	for (const symbol of symbols) {
 		if (webSocket.isSubscribed(symbol)) {
 			debug(`Killing WebSocket client process for symbol ${symbol}`);
-			webSocket.closeConnection(symbol);
+			webSocket.disconnect(symbol);
 		} else {
 			debug(`No WebSocket client process running for symbol ${symbol}`);
 		}
@@ -53,21 +54,12 @@ function delWatch(symbols) {
  */
 function shutdown() {
 	debug('Shutting down...');
-	setTimeout(() => webSocket.disconnectAll(), 5000);
+	setTimeout(() => webSocket.disconnectAll(), 5_000);
 	rabbit.disposeConnection().then(() => {
 		console.log('Disconnected from RabbitMQ');
 		process.exit(0);
 	});
 }
-
-// Handle Redis connection errors
-redis.pub.on('error', (err) => {
-	error('Error connecting to Redis:', err);
-});
-
-redis.sub.on('error', (err) => {
-	error('Error connecting to Redis:', err);
-});
 
 module.exports = {
 	addWatch,

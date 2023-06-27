@@ -5,6 +5,7 @@ const logger = require('../utils/logger');
 const env = require("../env");
 const { redisWebSockets } = require("../env");
 
+
 // Define callbacks for handling WebSocket stream events
 const callbacks = {
 	open: () => {},
@@ -32,13 +33,13 @@ const wsStream = new WebsocketStream({ logger, callbacks, combinedStreams: true 
 logger.debug('Binance combined stream created.');
 
 // Define the time intervals to calculate high and low prices for
-const intervals = Object.freeze(
+const priceIntervals = Object.freeze(
 	[5, 10, 15, 30, 60, 900, 1800, 3600, 86400, 604800, 2592000, 7776000, 15552000, 31536000, Infinity]
 );
 
 // Initialize the high and low price objects for each time interval
-const [highPrices, lowPrices] = Array.from({ length: intervals.length }, () => Object.fromEntries(
-	intervals.map(interval => [interval, interval === Infinity ? -Infinity : Infinity])
+const [highPrices, lowPrices] = Array.from({ length: priceIntervals.length }, () => Object.fromEntries(
+	priceIntervals.map(interval => [interval, interval === Infinity ? -Infinity : Infinity])
 ));
 
 // Define variables to track successful and failed Trade and Kline messages
@@ -53,7 +54,7 @@ setInterval(() => {
     \nSuccess: [K:${succK} T:${succT}(${succK + succT})]
     \nFailed:  [K:${failK} T:${failT}(${failK + failT})]`);
 	[succK, succT, failK, failT] = [0, 0, 0, 0, 0, 0];
-}, 10000);
+}, 10_000);
 
 
 /**
@@ -94,8 +95,9 @@ function subscribe(wsStream, symbol, intervals) {
 			logger.error(`Error when insert symbol to Redis: ${error}`);
 		}
 	});
+
 	for (const interval of intervals) {
-		wsStream.kline(symbol, interval);
+		//wsStream.kline(symbol, interval);
 	}
 }
 
@@ -166,7 +168,7 @@ function processTrade (trade) {
 	// Update the high and low price objects for each time interval
 	const timestamp = trade.E;
 	const price = parseFloat(trade.p);
-	for (const interval of intervals) {
+	for (const interval of priceIntervals) {
 		if (timestamp % interval === 0) {
 			highPrices[interval] = Math.max(highPrices[interval], price);
 			lowPrices[interval] = Math.min(lowPrices[interval], price);
@@ -209,7 +211,7 @@ function processTrade (trade) {
 		.zremrangebyscore(channelName, 0, cutoff)
 		.exec()
 		.then(() => {
-			for (const interval of intervals) {
+			for (const interval of priceIntervals) {
 				if (timestamp % interval === 0) {
 					const highPriceObject = Object.freeze({
 						interval,
@@ -274,7 +276,7 @@ function processKline(kline) {
 	});
 
 	// Update the high and low price objects for the Kline's time interval
-	const intervalIndex = intervals.findIndex((interval) => interval === klineData.i);
+	const intervalIndex = priceIntervals.findIndex((interval) => interval === klineData.i);
 	if (intervalIndex !== -1) {
 		const highPrice = highPrices[klineData.i];
 		const lowPrice = lowPrices[klineData.i];

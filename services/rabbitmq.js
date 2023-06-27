@@ -40,7 +40,10 @@ const sendChannel = channelWrapper
  * @param {function} callback - The callback function to call when the message is sent.
  */
 function sendQueue(queueName, message, priority = 0, expiration = undefined, callback) {
-	const options = { persistent: true, priority };
+	const options = {
+		persistent: true,
+		priority,
+	};
 	if (expiration) {
 		options.expiration = expiration;
 	}
@@ -88,9 +91,8 @@ function consumeQueuePromise(queueName, callback, options = { }) {
 	options = { ...options, noAck: true }
 	return new Promise((resolve, reject) => {
 		const consumerTag = channelWrapper.consume(queueName, (message) => {
-			const bufferPayload = message.content.toString();
-			const parsedPayload = JSON.parse(bufferPayload);
-			Promise.resolve(callback(parsedPayload))
+			logger.debug('Calling!');
+			Promise.resolve(callback(message))
 				.then(() => {
 					resolve();
 				})

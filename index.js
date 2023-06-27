@@ -25,7 +25,7 @@ function handleMessage(channel, message) {
       const { exchange, command, symbol } = JSON.parse(data);
 
       if (exchange !== 'binance') {
-        logger.warn(`Unsupported exchange: ${exchange}`);
+        logger.warn(`Unsupported exchange: \n${exchange}`);
         return;
       }
 
@@ -40,7 +40,7 @@ function handleMessage(channel, message) {
           listWatch();
           break;
         default:
-          logger.warn(`Unsupported command: ${command}`);
+          logger.warn(`Unsupported command: \n${command}`);
           break;
       }
     } else if (type === 'top_symbols') {
@@ -52,10 +52,10 @@ function handleMessage(channel, message) {
     } else if (type === 'intervals') {
       // TODO: Handle intervals
     } else {
-      logger.warn(`Unsupported message type: ${type}`);
+      logger.warn(`Unsupported message type: \n${type}`);
     }
   } catch (error) {
-    logger.error(`Failed to parse message: ${message}`);
+    logger.error(`Failed to parse message: \n${message}`);
   }
 }
 
@@ -66,7 +66,7 @@ warmUp().then(() => {
     try {
       await updateTopSymbolsTicker();
     } catch (error) {
-      logger.error(`Error updating top symbols ticker: ${error.message}`);
+      logger.error(`Error updating top symbols ticker: \n${error.message}`);
     }
   }, env.tickerInterval);
 
@@ -74,7 +74,7 @@ warmUp().then(() => {
 	// Subscribe to the minion_telephone channel
   redis.sub.subscribe(redisMinionChan, (error) => {
     if (error) {
-      logger.error(`Failed to subscribe to channel: ${error.message}`)
+      logger.error(`Failed to subscribe to channel: \n${error.message}`)
       return
     }
     logger.debug(`Subscribed to ${redisMinionChan} channel`)

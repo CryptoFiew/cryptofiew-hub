@@ -46,13 +46,13 @@ module.exports = {
   mongoHost: process.env.MONGO_HOST || 'mongodb://localhost:27017',
   mongoDb: process.env.MONGO_DB || 'crypto-pulse',
   // InfluxDB
-  influxUrl: process.env.INFLUXDB_URL || '',
+  influxUrl: process.env.INFLUXDB_URL || 'http://localhost:8086',
   influxToken: process.env.INFLUXDB_TOKEN || '',
-  influxOrg: process.env.INFLUXDB_ORG || '',
+  influxOrg: process.env.INFLUXDB_ORG || 'Stockfiew',
   influxBucket: process.env.INFLUXDB_BUCKET || 'crypto-pulse',
   // Variables
   tickerInterval: process.env.TICKER_INTERVAL * 1000 || 15 * 1000,
-  monitorSymbol: process.env.MONITOR_SYMBOL.toLowerCase() || 'usdt',
+  monitorSymbol: process.env.MONITOR_SYMBOL.toLowerCase() || 'USDT',
   topSymbolCount: process.env.TOP_SYMBOLS_COUNT || 20,
   klinesIntervals: process.env.KLINES_INTERVALS.toLowerCase().split(',') || '2h,4h,6h,8h,12h,1d,3d,1w'.split(','),
 };
