@@ -1,15 +1,20 @@
-# Crypto Pulse Minions
+# Crypto Pulse Hub
 
 ⚠️ Working progress ⚠️ 
 
-Due to author's ADHD, it is possible that this project may progress at a slower pace than other similar projects. 
+Due to the author's ADHD, it is possible that this project may progress at a slower pace than other similar projects. 
 
 Crypto Pulse Minions is a project that uses Node.js, Redis, MongoDB, InfluxDB and RabbitMQ to manage WebSocket client processes for monitoring cryptocurrency prices on various exchanges.
 
-This program should acting like a minion hub for other system to utilise its functionality.
+This program should be acting like a minion hub for another system to utilise its functionality.
+
+## The Purpose?
+The Crypto Pulse hub is a system that aims to monitor top cryptocurrency symbols based on Binance's 24-hour ticker volume trades for data collection purposes. The hub retrieves trading data using the official Binance/connector and stores the top symbols and intervals in Redis. Moreover, kline and trade data are passed through a WebSocket connection into both Redis and RabbitMQ to facilitate real-time monitoring and data storing.
+To provide a modular design, a subprocess monitors RabbitMQ for new queues and retrieves data for storage in InfluxDB. This approach enables scalability and adaptability to changing user demands.
+The Crypto Pulse hub is compatible with both Kubernetes setups and single-server environments. Regardless of the deployment configuration, this powerful tool can enhance data monitoring and collection capabilities for crypto traders.
 
 ## Requirements
-To use Crypto Pulse Minions, you'll need to have the following installed on your machine:
+To use Crypto Pulse Hub, you'll need to have the following installed on your machine:
 
 * Node.js (https://nodejs.org/)
 * Redis (https://redis.io/)
@@ -19,11 +24,11 @@ To use Crypto Pulse Minions, you'll need to have the following installed on your
 
 ## Installation
 
-To use Crypto Pulse Minions, you can follow these steps:
-1. Install [Docker](https://docker.com/) and [Docker Compose](https://docs.docker.com/compose/install/) on your machine.
-2. Clone this repository to your local machine:
+To use Crypto Pulse Hub, follow these steps:
+1. Install [Docker](https://docker.com/) and [Docker Compose](https://docs.docker.com/compose/install/).
+2. Clone this repository:
 ```bash
-$ git clone https://github.com/stockfiew/crypto-pulse-minions.git
+$ git clone https://github.com/p3nj/crypto-pulse-minions.git
 ```
 3. Navigate to the project directory and run the following command to pull the required images:
 ```bash
@@ -33,13 +38,13 @@ $ docker-compose pull
 ```bash
 $ docker-compose up
 ```
-5. The Crypto Pulse Minions should now be running and ready to use.
+5. The Crypto Pulse Hub should now be running and ready to use.
 Note: If you want to run the containers in the background, you can use the `-d` flag with the `docker-compose up` command.
 
 ## Usage
 
 ### Docker Compose
-For easier deployment and lower the knowledge requirement to run this system, highly suggest to choose docker to start this project.
+For easier deployment and to lower the knowledge required to run this system, I highly suggest choosing Docker to start this project.
 
 ```bash
 $ docker compose build
@@ -49,7 +54,7 @@ $ docker compose up -d
 
 ### Manually ( System-wide )
 
-To use Crypto Pulse Minions, you'll need to have RabbitMQ, VictoriaMetrics and Redis setup correctly and running before proceed this introduction.
+To use Crypto Pulse Hub, you'll need to have RabbitMQ, InfluxDB, MongoDB, and Redis set up correctly and running before proceeding with the introductions below.
 
 #### RabbitMQ
 
