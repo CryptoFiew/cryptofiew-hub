@@ -4,23 +4,6 @@ const { influxUrl, influxToken, influxOrg, influxBucket } = require('../env');
 const logger = require("../utils/logger");
 const {error} = require("../utils/logger");
 
-const flushBatchSize = DEFAULT_WriteOptions.batchSize;
-
-// advanced write options
-const writeOptions = {
-	/* the maximum points/lines to send in a single batch to InfluxDB server */
-	batchSize: flushBatchSize + 1, // don't let automatically flush data
-	/* default tags to add to every point */
-	/* maximum time in millis to keep points in an unflushed batch, 0 means don't periodically flush */
-	flushInterval: 15_000,
-	/* maximum size of the retry buffer - it contains items that could not be sent for the first time */
-	maxBufferLines: 30_000,
-	/* the count of internally-scheduled retries upon write failure, the delays between write attempts follow an exponential backoff strategy if there is no Retry-After HTTP header */
-	maxRetries: 0, // do not retry writes
-	// ... there are more write options that can be customized, see
-	// https://influxdata.github.io/influxdb-client-js/influxdb-client.writeoptions.html and
-	// https://influxdata.github.io/influxdb-client-js/influxdb-client.writeretryoptions.html
-}
 
 const agent = new Agent({
 	keepAlive: true, // Reuse existing connection
@@ -49,7 +32,7 @@ process.on('exit', () => agent.destroy());
 async function writeData(points) {
 	try{
     writeApi.writePoints(points);
-		return writeApi.flush();
+		return await writeApi.flush();
 	} catch (err) {
 		logger.error(`Error writing data points to InfluxDB: ${err.message}`);
 		throw err;
