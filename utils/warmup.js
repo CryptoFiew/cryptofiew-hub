@@ -1,113 +1,153 @@
-const moment = require('moment');
 const { Spot } = require("@binance/connector");
 const { writeData } = require("../services/influx");
-const {createCollection, isCollectionEmpty, findAllDocuments} = require("../services/mongo");
-const {updateMinionsFromTopSymbols, handleUpdateMinions} = require("./monitor");
+const { updateTopSymbolsTicker} = require("./monitor");
+const { redis } = require('../services/redis')
+const { Point } = require("@influxdata/influxdb-client");
 const env = require("../env");
+const logger = require('./logger');
+const mongo = require("../services/mongo");
+const { arraysEqual, calculateKlines} = require('./utils');
+const RedisChanMsg = require("../models/redis");
+const client = new Spot();
+const { hopper } = require('../minion/hopper-mq')
 
+/**
+ * Warms up the application by starting the hopper,
+ * initializing MongoDB,
+ * updating top symbols,
+ * and retrieving and storing klines.
+ */
 async function warmUp() {
-    try {
-        // Create collections in mongodb
-        await createCollection('intervals')
-        await createCollection('top_symbols')
+  logger.debug('Starting warm-up...');
 
-        // Check if intervalList exists inside VictoriaMetrics
-        const intervalListExists = isCollectionEmpty('intervals')
-        // If not, store the IntervalList
-        if (!intervalListExists) {
-            console.log('Interval list not found in MongoDB');
-            await storeIntervalList();
-        } else {
-            console.log('Interval list already exists in MongoDB');
-        }
-        // Retrieve the interval list
-        const intervalList = await findAllDocuments('intervals')
-        const topSymbols = await findAllDocuments('top_symbols')
+	try {
+		// Initialize MongoDB
+    await mongoWarmUp();
+    logger.info('MongoDB initialized successfully.');
 
-        updateMinionsFromTopSymbols(handleUpdateMinions)
+    // Update top symbols
+    const topSymbols = await updateTopSymbolsTicker();
+    logger.info(`Top symbols updated: ${JSON.stringify(topSymbols)}`);
 
-        // Retrieve and store klines
-        await retrieveAndStoreKlines(topSymbols, intervalList, 1000);
-        console.log('Kline data retrieved and stored successfully');
-    } catch (error) {
-        console.error(`Error warming up: ${error.message}`);
-        throw error;
-    }
+    // Retrieve and store klines
+    await retrieveAndStoreKlines(topSymbols, 1000);
+    logger.info('Klines retrieved and stored successfully.');
+
+		// Start hopper process
+		hopper.start(4);
+		logger.info('Hopper started successfully.');
+
+  } catch (error) {
+      logger.error(`Error during warm-up: ${error.message}`);
+  }
 }
 
+/**
+ * Initializes MongoDB by creating the 'intervals' collection,
+ * updating the interval list, and publishing the list to Redis.
+ * @returns {Array<string>} The list of intervals.
+ */
+async function mongoWarmUp() {
+	let returnIntervals;
+	await mongo.connect();
+  const intervals = env.klinesIntervals;
 
-async function retrieveAndStoreKlines(symbols, intervals, count = 1000) {
-    if (count > 1000) count = 1000;
-    // Create a new Binance client with the specified API key and secret
-    const client = new Spot();
+  // Create the 'intervals' collection in MongoDB
+  await mongo.create('intervals');
+  logger.debug('Created or found "intervals" collection in MongoDB.');
 
-    // Retrieve the kline data for each symbol and interval up to `count` klines
-    const promises = symbols.flatMap(async symbol => {
-        const dataPointsPromises = intervals.map(async interval => {
-            try {
-                const response = await client.klines(symbol, interval, { limit: count });
-                const dataPoints = response.data.map(kline => {
-                    return {
-                        metric: 'kline',
-                        tags: { symbol, interval },
-                        values: [
-                            parseFloat(kline[1]), // open
-                            parseFloat(kline[2]), // high
-                            parseFloat(kline[3]), // low
-                            parseFloat(kline[4]), // close
-                            parseFloat(kline[5]), // volume
-                            parseFloat(kline[7]), // quoteAssetVolume
-                            parseInt(kline[8]),   // numberOfTrades
-                            parseFloat(kline[9]), // takerBuyBaseAssetVolume
-                            parseFloat(kline[10]),// takerBuyQuoteAssetVolume
-                        ],
-                        timestamps: [moment(kline[0]).valueOf() / 1000], // convert to seconds
-                    };
-                });
+  // Flush Redis
+  await redis.pub.flushdb('SYNC', (error, result) => {
+      if (error) {
+          logger.error(`Error flushing Redis: ${error.message}`);
+      } else {
+          logger.info(`Flushed Redis: ${result}`);
+      }
+  });
 
-                await writeData(dataPoints);
-            } catch (error) {
-                console.error(`Error retrieving kline data for symbol ${symbol} and interval ${interval}: ${error.message}`);
-            }
-        });
-        await Promise.all(dataPointsPromises);
-    });
+  // Update the interval list in MongoDB
+  const intervalListEmpty = await mongo.isEmpty('intervals');
+  const mongoIntervals = await mongo.getContents('intervals');
+	const currentIntervals = mongoIntervals.map((item) => (item.interval));
+	logger.debug(`currentIntervals: \n${JSON.stringify(currentIntervals)}`)
 
-    // Wait for all the kline data to be written to InfluxDB
-    await Promise.all(promises);
-    console.log('All history data is stored inside influx DB');
+  if (intervalListEmpty || !arraysEqual(intervals, currentIntervals)) {
+    logger.debug('Updating interval list in MongoDB.');
+    await mongo.purge('intervals');
+    await mongo.inserts('intervals', intervals.map(interval => ({ interval })));
+		// Update the interval list in Redis
+		logger.debug(`Setting new intervals to key ${env.redisIntervals}`);
+		logger.debug(`[C] Setting return intervals: ${intervals}`);
+		returnIntervals = intervals;
+	} else {
+		logger.debug(`[N] Setting return intervals: ${JSON.stringify(currentIntervals)}`);
+		returnIntervals = currentIntervals;
+		logger.info('Skipping update - interval list has not changed.');
+	}
+
+	// Publish the interval list to the 'intervals' channel
+  const channel = env.redisMinionChan;
+	const message = { type: 'intervals', data: intervals }
+	redis.pub.publish(channel, JSON.stringify(message));
+	logger.info(`Publish new intervals list to ${env.redisMinionChan}`)
+	redis.lPop(env.redisIntervals, 20);
+	redis.lPush(env.redisIntervals, returnIntervals);
 }
 
-async function storeIntervalList() {
-    try {
-        // Split the comma-separated interval list into an array
-        const intervalList = env.klineIntervals;
+/**
+ * Retrieves and stores klines for the given symbols and intervals in InfluxDB.
+ * @param {Array<string>} symbols - The list of symbols to retrieve klines for.
+ * @param {Array<string>} intervals - The list of intervals to retrieve klines for.
+ * @param {number} [count=1000] - The maximum number of klines to retrieve for each symbol and interval.
+ */
+async function retrieveAndStoreKlines(symbols) {
 
-        // Create a data point with the interval list
-        const dataPoint = {
-            metric:
-            {
-                "__name__": 'interval_list',
-                tags: {
-                    namespace: env.influxBucket
-                },
-                job: "insert_interval_list"
-            },
-            values: [1],
-            fields: { intervals: intervalList },
-            timestamps: [moment().valueOf()],
-        };
+	logger.debug(`Retrieve Symbols as parameter: ${JSON.stringify(symbols)}`);
+	const intervals = await redis.getList(env.redisIntervals)
+	logger.debug(`Retrieve Intervals from Redis: ${intervals}`)
+	const klinesIntervals = calculateKlines(intervals, 30);
+	logger.debug(`Kline count results: ${JSON.stringify(klinesIntervals)}`)
 
-        // Write the data point to VictoriaMetrics
-        await writeData([dataPoint]);
-        console.log('Interval list stored in VictoriaMetrics');
-    } catch (error) {
-        console.error(`Error storing interval list in VictoriaMetrics: ${error.message}`);
-        throw error;
-    }
+	const dataPointsPromises = [];
+	symbols.forEach((symbol) => {
+		Object.entries(klinesIntervals).forEach(([interval, limit]) => {
+			dataPointsPromises.push(client.klines(symbol, interval, { limit: limit })
+				.then((response) => {
+					return response.data.map((kline) =>
+						new Point(`${symbol}_${interval}`)
+							.tag('asset', symbol)
+							.tag('interval', interval)
+							.tag('type', 'kline')
+							.floatField('open', parseFloat(kline[1]))
+							.floatField('high', parseFloat(kline[2]))
+							.floatField('low', parseFloat(kline[3]))
+							.floatField('close', parseFloat(kline[4]))
+							.floatField('volume', parseFloat(kline[5]))
+							.floatField('quoteAssetVolume', parseFloat(kline[7]))
+							.floatField('numberOfTrades', parseFloat(kline[8]))
+							.floatField('takerBuyBaseBAssetVolume', parseFloat(kline[9]))
+							.floatField('takerBuyQuoteAssetVolume', parseInt(kline[10]))
+							.timestamp(new Date(kline[0]))
+					);
+				})
+			);
+		});
+	});
+
+  try {
+		Promise.all(dataPointsPromises)
+			.then((dp) => {
+				const allDataPoints = [].concat(...dp)
+				writeData((allDataPoints))
+			})
+    logger.debug('All kline data is stored in InfluxDB.');
+  } catch (error) {
+    logger.error(`Error retrieving or storing kline data: 
+    ${error.message}`);
+  }
 }
 
 
 module.exports = {
-    warmUp,
+    warmUp
 }

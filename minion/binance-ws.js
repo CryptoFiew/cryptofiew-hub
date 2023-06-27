@@ -1,12 +1,4 @@
-const { WebsocketStream } = require('@binance/connector');
-const { createConnection, disposeConnection, sendMessage} = require('../services/rabbitmq');
-const { redis } = require('../services/redis')
-const { Console } = require('console');
-
-const WS_TRADE = 'ws-trade';
 const WS_KLINE = 'ws-kline';
-
-const logger = new Console({ stdout: process.stdout, stderr: process.stderr });
 
 const symbol = process.argv[2]; // Get the symbol from the command line arguments
 

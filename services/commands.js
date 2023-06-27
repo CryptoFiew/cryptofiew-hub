@@ -1,148 +1,67 @@
-const { spawn } = require('child_process');
 const { redis } = require('./redis');
+const { webSocket } = require("./binance");
+const { debug, error } = require("../utils/logger");
+const { redisIntervals, klinesIntervals } = require("../env");
+const rabbit = require("./rabbitmq");
+const logger = require("../utils/logger");
 
-// Store the child processes in a map
-const childProcesses = new Map();
+/**
+ * Adds a watch for the specified symbols.
+ * @param {string[]} symbols - The symbols to watch.
+ */
+async function addWatch(symbols) {
+	try {
+		const intervals = await redis.getList(redisIntervals);
 
-function addWatch(symbols, isUserAdd=false) {
-    symbols = symbols.map(symbol => symbol.trim()); // Split the symbols string into an array and trim whitespace
+		const watchIntervals = intervals.length ? intervals : klinesIntervals;
 
-    symbols.forEach(symbol => {
-        console.log(`Adding watch for symbol ${symbol}`);
+		symbols.forEach(symbol => {
+			if (webSocket.isSubscribed(symbol)) {
+				return;
+			}
 
-        // Check if a child process is already running for this symbol
-        if (childProcesses.has(symbol)) {
-            return;
-        }
-
-        // Execute the binance-ws.js script as a separate node process
-        const clientProcess = spawn('node', ['minion/binance-ws.js', symbol]);
-        const clientProcessId = clientProcess.pid.toString();
-        console.log(`Started WebSocket client process for symbol ${symbol}: PID ${clientProcessId}`);
-
-        // Save the child process ID to Redis and the childProcesses map
-        redis.pub.lpush('minions', JSON.stringify({ exchange: 'binance', command: 'add_watch', symbol, isUserAdd }));
-        redis.pub.hset('processes', symbol, clientProcessId);
-        childProcesses.set(symbol, clientProcess);
-
-        // Listen for the process to exit
-        clientProcess.on('exit', (code, signal) => {
-            console.log(`WebSocket client process ended for symbol ${symbol}: PID ${clientProcessId}, code ${code}, signal ${signal}`);
-            redis.pub.publish('minion_telephone_ended', JSON.stringify({ exchange: 'binance', command: 'add_watch', symbol }));
-            redis.pub.hdel('processes', symbol).then(() => {
-                console.log(`Removed process ID for symbol ${symbol} from Redis`);
-            }).catch((error) => {
-                console.error(`Failed to remove process ID from Redis: ${error.message}`);
-            });
-            childProcesses.delete(symbol);
-
-        });
-        // Start the hopper-mq.js script if there is only one child process running
-        // Execute the binance-ws.js script as a separate node process
-        if (childProcesses.size === 1 && !childProcesses.get('hopper-mq')){
-            const hopperProcess = spawn('node', ['minion/hopper-mq.js', symbol]);
-            const hopperProcessId = clientProcess.pid.toString();
-            childProcesses.set('hopper', hopperProcess)
-            console.log(`Starting hopper-mq.js with PID ${hopperProcessId}`);
-            redis.pub.hset('processes', 'hopper', hopperProcessId);
-            redis.pub.lpush('minions', JSON.stringify({ exchange: 'nil', command: 'start_hopper', pid: hopperProcessId }));
-
-            // Listen for the process to exit
-            hopperProcess.on('exit', (code, signal) => {
-                console.log(`Hopper: The job is done. PID ${hopperProcessId}, code ${code}, signal ${signal}`);
-                redis.pub.publish('minion_telephone_ended', JSON.stringify({ exchange: 'nil', command: 'stop_hopper', pid: hopperProcess }));
-                redis.pub.hdel('processes', 'hopper').then(() => {
-                    console.log(`Removed Hopper's process ID from Redis`);
-                }).catch((error) => {
-                    console.error(`Failed to remove process ID from Redis: ${error.message}`);
-                });
-                childProcesses.delete('hopper');
-            });
-        }
-    });
+			debug(`Adding watch for symbol ${symbol}`);
+			webSocket.connect()
+				.then((stream) => {
+					webSocket.subscribe(stream, symbol, watchIntervals);
+				});
+		});
+	} catch (err) {
+		error(`Error getting intervals hash: ${err.message}`);
+	}
 }
 
+/**
+ * Deletes the watch for the specified symbols.
+ * @param {string[]} symbols - The symbols to delete the watch for.
+ */
 function delWatch(symbols) {
-    console.log(`Deleting watch for symbols: ${symbols.join(', ')}`);
+	debug(`Deleting watch for symbols: ${symbols.join(', ')}`);
 
-    for (const symbol of symbols) {
-        // Check if a child process is running for this symbol
-        if (childProcesses.has(symbol)) {
-            const clientProcess = childProcesses.get(symbol);
-            const clientProcessId = clientProcess.pid.toString();
-            console.log(`Killing WebSocket client process for symbol ${symbol}: PID ${clientProcessId}`);
-            clientProcess.kill();
-            childProcesses.delete(symbol);
-
-            // Remove the process ID from Redis
-            redis.pub.hdel('processes', symbol).then(() => {
-                console.log(`Removed process ID for symbol ${symbol} from Redis`);
-            }).catch((error) => {
-                console.error(`Failed to remove process ID from Redis: ${error.message}`);
-            });
-        } else {
-            console.log(`No WebSocket client process running for symbol ${symbol}`);
-        }
-    }
+	for (const symbol of symbols) {
+		if (webSocket.isSubscribed(symbol)) {
+			debug(`Killing WebSocket client process for symbol ${symbol}`);
+			webSocket.disconnect(symbol);
+		} else {
+			debug(`No WebSocket client process running for symbol ${symbol}`);
+		}
+	}
 }
 
-function listWatch() {
-    console.log(`Listing active watches`);
-
-    // Get the list of active watches from the childProcesses map
-    const watches = Array.from(childProcesses.keys());
-    console.log(`Active watches: ${watches.join(', ')}`);
-
-    // Publish the list of active watches to the minion_telephone channel
-    const watchesJson = JSON.stringify(watches);
-    redis.pub.publish('minion_telephone', watchesJson);
-}
-
-
-// Handle SIGINT and SIGTERM signals
+/**
+ * Shuts down the application.
+ */
 function shutdown() {
-    console.log('Shutting down...');
-    for (const [symbol, clientProcess] of childProcesses.entries()) {
-        const clientProcessId = clientProcess.pid.toString();
-        console.log(`Killing WebSocket client process for symbol ${symbol}: PID ${clientProcessId}`);
-        clientProcess.kill();
-        redis.pub.hdel('processes', symbol).then(() => {
-            console.log(`Removed process ID for symbol ${symbol} from Redis`);
-        }).catch((error) => {
-            console.error(`Failed to remove process ID from Redis: ${error.message}`);
-        });
-    }
-    process.exit(0);
+	debug('Shutting down...');
+	setTimeout(() => webSocket.disconnectAll(), 5_000);
+	rabbit.disposeConnection().then(() => {
+		console.log('Disconnected from RabbitMQ');
+		process.exit(0);
+	});
 }
-
-// Handle Redis connection errors
-redis.pub.on('error', (err) => {
-    console.error('Error connecting to Redis:', err);
-});
-
-redis.sub.on('error', (err) => {
-    console.error('Error connecting to Redis:', err);
-});
-
-// Subscribe to the shutdown channel and listen for signals
-redis.sub.subscribe('minion_telephone_shutdown', (err, count) => {
-    if (err) {
-        console.error('Error subscribing to minion_telephone_shutdown:', err);
-        return;
-    }
-    console.log(`Subscribed to minion_telephone_shutdown channel with ${count} subscriber(s)`);
-});
-
-redis.sub.on('message', (channel, message) => {
-    if (channel === 'minion_telephone_shutdown') {
-        console.log('Received shutdown signal from Redis');
-        shutdown();
-    }
-});
 
 module.exports = {
-    addWatch,
-    delWatch,
-    listWatch,
-    shutdown,
+	addWatch,
+	delWatch,
+	shutdown,
 };

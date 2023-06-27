@@ -1,158 +1,109 @@
-const { redis } = require("../services/redis");
-const { addWatch, delWatch } = require("../services/commands");
-const { writeData } = require("../services/influx");
-const moment = require("moment");
+const {redis} = require("../services/redis");
+const {addWatch, delWatch} = require("../services/commands");
+const {writeData} = require("../services/influx");
 const {Spot} = require("@binance/connector");
+const {webSocket} = require('../services/binance');
+const {Point} = require("@influxdata/influxdb-client");
+const env = require("../env");
+const logger = require('../utils/logger');
 
-function updateMinionsFromTopSymbols(callback) {
-    const channel = 'top_symbols';
-    const subClient = redis.sub;
 
-    // Subscribe to the 'top_symbols' channel
-    subClient.subscribe(channel, (error) => {
-        if (error) {
-            callback(error);
-            return;
-        }
-        console.log(`Subscribed to ${channel} channel`);
-
-        // Listen for messages on the 'top_symbols' channel
-        subClient.on('message', async (channel, message) => {
-            try {
-                const topSymbols = JSON.parse(message);
-
-                // Check if the 'watch_list' key exists in Redis
-                let watchList = await redis.pub.get('watch_list');
-                if (watchList === null || watchList === undefined) {
-                    // If the 'watch_list' key does not exist, create it with an empty array value
-                    const setnxResult = await redis.pub.setnx('watch_list', JSON.stringify([]));
-                    if (setnxResult === 1) {
-                        console.log(`Created 'watch_list' key in Redis`);
-                    }
-                    watchList = '[]'; // Set watchList to an empty array string so that it can be parsed later
-                }                    const parsedWatchList = JSON.parse(watchList);
-
-                const symbolsToAdd = topSymbols.filter(symbol => !parsedWatchList.includes(symbol));
-                const symbolsToRemove = parsedWatchList.filter(symbol => !topSymbols.includes(symbol));
-                if (symbolsToAdd.length > 0) {
-                    console.log(`Adding watch for symbols: ${symbolsToAdd.join(', ')}`);
-                    addWatch(symbolsToAdd, false); // Set isUserAdded flag to true for symbols added by the user
-                }
-                if (symbolsToRemove.length > 0) {
-                    console.log(`Removing watch for symbols: ${symbolsToRemove.join(', ')}`);
-                    delWatch(symbolsToRemove);
-                }
-
-                callback(null, topSymbols);
-            } catch (error) {
-                // TODO: Handle the error appropriately, such as logging an error message or throwing the error
-                console.error(`Error updating Minions from top symbols list: ${error.message}`);
-                callback(error);
-            }
-        });
-    });
-}
-
-function handleUpdateMinions(error, topSymbols) {
-    if (error) {
-        console.error(`Error updating Minions from top symbols list: ${error.message}`);
-    } else {
-        console.log(`Minions updated successfully from top symbols list: ${topSymbols.join(', ')}`);
-    }
-}
-
+/**
+ •	Retrieves the 24-hour ticker data for all symbols, updates the top symbols list, and writes the ticker data to InfluxDB.
+ •	@returns {Promise<Array<string>>} The updated list of top symbols.
+ */
 async function updateTopSymbolsTicker() {
     try {
         // Create a new Binance client with the specified API key and secret
         const client = new Spot();
-
         // Retrieve the ticker data for all symbols
         const response = await client.ticker24hr();
-
-        // Sort the ticker data by quoteVolume and limit it to the top 100 symbols
-        const topSymbols = response.data
-            .sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
-            .slice(0, 100)
+				logger.debug(`Response from 24h ticker: ${JSON.stringify(response.data.length)}`)
+        if (!response.data) {
+            logger.error('Error retrieving ticker data.');
+            return Promise.reject(new Error('Error retrieving ticker data.'));
+        }
+        // Sort the top symbols by volume
+        const topSymbols = response.data.sort((a, b) => b.volume - a.volume);
+        // Filter and slice the top symbols list
+        const filteredTopSymbols = topSymbols
+            .filter(item => item.symbol.endsWith(env.monitorSymbol.toUpperCase()))
+            .slice(0, env.topSymbolCount)
             .map(item => item.symbol);
 
-        // Check if the top symbols list has changed
-        const previousTopSymbols = await redis.pub.get('top_symbols');
-        if (previousTopSymbols) {
-            const parsedPreviousTopSymbols = JSON.parse(previousTopSymbols);
-            if (arraysEqual(topSymbols, parsedPreviousTopSymbols)) {
-                console.log('Skipping update - top symbols list has not changed');
-                return;
-            }
-        }
-
-        // Update the top symbols list in Redis
-        await redis.pub.set('top_symbols', JSON.stringify(topSymbols));
-
-        // Publish the top symbols list to the 'top_symbols' channel
-        const channel = 'top_symbols';
-        const message = JSON.stringify(topSymbols);
-        redis.pub.publish(channel, message);
-
-        // Transform the ticker data into an array of dataPoints objects
-        const dataPoints = response.data.map(item => {
-            return {
-                metric: {
-                    name: 'ticker_day',
-                    tags: { symbol: item.symbol, namespace: process.env.VM_NAMESPACE },
-                    job: "update_top_symbol_ticker_24h"
-                },
-                fields: {
-                    priceChange: parseFloat(item.priceChange),
-                    priceChangePercent: parseFloat(item.priceChangePercent),
-                    weightedAvgPrice: parseFloat(item.weightedAvgPrice),
-                    prevClosePrice: parseFloat(item.prevClosePrice),
-                    lastPrice: parseFloat(item.lastPrice),
-                    lastQty: parseFloat(item.lastQty),
-                    bidPrice: parseFloat(item.bidPrice),
-                    bidQty: parseFloat(item.bidQty),
-                    askPrice: parseFloat(item.askPrice),
-                    askQty: parseFloat(item.askQty),
-                    openPrice: parseFloat(item.openPrice),
-                    highPrice: parseFloat(item.highPrice),
-                    lowPrice: parseFloat(item.lowPrice),
-                    volume: parseFloat(item.volume),
-                    quoteVolume: parseFloat(item.quoteVolume),
-                    openTime: item.openTime,
-                    closeTime: item.closeTime,
-                    firstId: parseInt(item.firstId),
-                    lastId: parseInt(item.lastId),
-                    count: parseInt(item.count),
-                },
-                timestamps: moment().valueOf(),
-            };
+				logger.debug(`filteredTopSymbols: ${filteredTopSymbols}`);
+        // Process the top symbols list
+        const processedTopSymbols = await processTopSymbols(filteredTopSymbols);
+        // Create new points for InfluxDB
+        const points = response.data.map(item => {
+          return new Point('ticker_day')
+            .tag('type', 'top_symbol_24h')
+            .tag('openTime', item.openTime)
+            .tag('source', 'updateTopSymbolsTicker')
+            .floatField('priceChange', parseFloat(item.priceChange))
+            .floatField('priceChangePercent', parseFloat(item.priceChangePercent))
+            .floatField('weightedAvgPrice', parseFloat(item.weightedAvgPrice))
+            .floatField('prevClosePrice', parseFloat(item.prevClosePrice))
+            .floatField('lastPrice', parseFloat(item.lastPrice))
+            .floatField('lastQty', parseFloat(item.lastQty))
+            .floatField('bidPrice', parseFloat(item.bidPrice))
+            .floatField('bidQty', parseFloat(item.bidQty))
+            .floatField('askPrice', parseFloat(item.askPrice))
+            .floatField('askQty', parseFloat(item.askQty))
+            .floatField('openPrice', parseFloat(item.openPrice))
+            .floatField('highPrice', parseFloat(item.highPrice))
+            .floatField('lowPrice', parseFloat(item.lowPrice))
+            .intField('volume', parseInt(item.volume))
+            .floatField('quoteVolume', parseFloat(item.quoteVolume))
+            .timestamp(new Date(item.closeTime));
         });
 
-        // Write the ticker data to VictoriaMetrics
-        await writeData(dataPoints);
-
-
-        console.log('Top symbols ticker updated successfully');
+        // Write the ticker data to InfluxDB
+        return await writeData(points).then(() => {
+          logger.debug('Updated top symbols ticker successfully.');
+					logger.debug(`returning processedTopSymbols: ${processedTopSymbols}`);
+          return processedTopSymbols;
+        });
     } catch (error) {
-        // TODO: Handle the error appropriately, such as logging an error message or throwing the error
-        console.error(`Error updating top symbols ticker: ${error.message}`);
+        logger.error(`Error retrieving or processing ticker data: ${error.message}`);
+        throw error;
     }
 }
 
-function arraysEqual(arr1, arr2) {
-    if (arr1.length !== arr2.length) {
-        return false;
-    }
-    for (let i = 0; i < arr1.length; i++) {
-        if (arr1[i] !== arr2[i]) {
-            return false;
-        }
-    }
-    return true;
-}
+/**
+ * Processes the top symbols list by retrieving it from Redis, comparing it to the current list of symbols, and adding or removing symbols from the watch list as necessary.
+ * @param {Array<string>} symbols - The current list of top symbols.
+ * @returns {Promise<Array<string>>} The updated list of top symbols.
+ */
+async function processTopSymbols(symbols) {
+	logger.debug(`processTopSymbols: ${symbols}`);
+  try {
+    // Retrieve the top symbols list from Redis
+		const topSymbols = await redis.getList(env.redisTopSymbols);
 
+    // Compare the top symbols list to the current list of symbols and determine which symbols to add or remove
+    const symbolsToAdd = symbols.filter(symbol => !topSymbols.includes(symbol));
+    const symbolsToRemove = topSymbols.filter(symbol => !(symbols.includes(symbol)));
+    logger.debug(`symbolsToAdd: \n${JSON.stringify(symbolsToAdd)} \nsymbolsToRemove: \n${JSON.stringify(symbolsToRemove)}`);
+
+    // Add or remove symbols from the watch list
+    if (symbolsToAdd.length > 0) {
+      redis.lPush(env.redisTopSymbols, symbolsToAdd);
+      addWatch(symbolsToAdd); // Set isUserAdded flag to true for symbols added by the user
+    }
+    if (symbolsToRemove.length > 0) {
+      redis.remove(env.redisTopSymbols, symbolsToRemove);
+      delWatch(symbolsToRemove);
+    }
+
+		return await redis.getList(env.redisTopSymbols);
+	} catch (error) {
+		logger.error(`Error processing top symbols: ${error.message}`);
+      throw error;
+  }
+}
 
 module.exports = {
-    updateMinionsFromTopSymbols,
-    handleUpdateMinions,
+    processTopSymbols,
     updateTopSymbolsTicker
 }

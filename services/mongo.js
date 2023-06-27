@@ -1,171 +1,304 @@
 const { MongoClient } = require('mongodb');
-require('dotenv').config()
+const { mongoHost, mongoDb } = require('../env');
+const { debug, error } = require('../utils/logger');
 
-const uri = `${process.env.MONGO_HOST}/${process.env.MONGO_DB}`;
+const uri = `${mongoHost}/${mongoDb}`;
 const client = new MongoClient(uri);
 
-(async function() {
-    try {
-        await client.connect();
-        console.log('Connected to MongoDB');
-    } catch (err) {
-        console.error(err);
-    }
-})();
-
-async function disposeConnection() {
-    try {
-        await client.close();
-        console.log('Disconnected from MongoDB');
-    } catch (err) {
-        console.error(err);
-    }
+/**
+ * Connects to the MongoDB database.
+ * @returns {Promise<void>} - A promise that resolves when the connection is established.
+ */
+async function connect() {
+	try {
+		await client.connect();
+		debug('Connected to MongoDB');
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
-async function createCollection(collectionName) {
-    const db = client.db();
-    try {
-        await db.createCollection(collectionName);
-        console.log(`Collection ${collectionName} created`);
-    } catch (err) {
-        if (err.message.includes('already exists')) {
-            console.log(`Collection ${collectionName} already exists`);
-        } else {
-            console.error(err);
-        }
-    }
+/**
+ * Disconnects from the MongoDB database.
+ * @returns {Promise<void>} - A promise that resolves when the connection is closed.
+ */
+async function dispose() {
+	try {
+		await client.close();
+		debug('Disconnected from MongoDB');
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
-async function insertDocument(collectionName, document) {
-    const collection = client.db().collection(collectionName);
-    try {
-        const result = await collection.insertOne(document);
-        return result.insertedId;
-    } catch (err) {
-        console.error(err);
-        return null;
-    }
+/**
+ * Creates a new collection in the MongoDB database.
+ * @param {string} collectionName - The name of the collection to create.
+ * @returns {Promise<void>} - A promise that resolves when the collection is created.
+ */
+async function create(collectionName) {
+	try {
+		const db = client.db();
+		await db.createCollection(collectionName);
+		debug(`Collection ${collectionName} created`);
+	} catch (err) {
+		if (err.message.includes('already exists')) {
+			debug(`Collection ${collectionName} already exists`);
+		} else {
+			error(err);
+			throw err;
+		}
+	}
 }
 
-async function insertDocuments(collectionName, documents) {
-    const collection = client.db().collection(collectionName);
-    try {
-        const result = await collection.insertMany(documents);
-        return result.insertedIds;
-    } catch (err) {
-        console.error(err);
-        return null;
-    }
+/**
+ * Gets a reference to a collection in the MongoDB database.
+ * @param {string} collectionName - The name of the collection to get.
+ * @returns {Promise<object>} - A promise that resolves with a reference to the specified collection.
+ */
+async function get(collectionName) {
+	try {
+		const db = client.db();
+		return db.collection(collectionName);
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
-async function findDocuments(collectionName, query) {
-    const collection = client.db().collection(collectionName);
-    try {
-        const cursor = collection.find({});
-        return await cursor.toArray();
-    } catch (err) {
-        console.error(err);
-        return [];
-    }
+/**
+ * Gets the contents of a collection in the MongoDB database.
+ * @param {string} collectionName - The name of the collection to get the contents of.
+ * @returns {Promise<object[]>} - A promise that resolves with an array of documents in the specified collection.
+ */
+async function getContents(collectionName) {
+	try {
+		const collection = await get(collectionName);
+		return await collection.find().toArray();
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
-async function findAllDocuments(collectionName) {
-    const collection = client.db().collection(collectionName);
-    try {
-        const cursor = collection.find({});
-        return await cursor.toArray();
-    } catch (err) {
-        console.error(err);
-        return [];
-    }
+/**
+ * Gets the number of documents in a collection in the MongoDB database.
+ * @param {string} collectionName - The name of the collection to get the length of.
+ * @returns {Promise<number>} - A promise that resolves with the number of documents in the specified collection.
+ */
+async function getLength(collectionName) {
+	try {
+		const collection = await get(collectionName);
+		return await collection.countDocuments();
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
-async function findOneDocument(collectionName, query) {
-    const collection = client.db().collection(collectionName);
-    try {
-        return await collection.findOne(query);
-    } catch (err) {
-        console.error(err);
-        return null;
-    }
+/**
+ * Inserts a document into a collection in the MongoDB database.
+ * @param {string} collectionName - The name of the collection to insert the document into.
+ * @param {object} document - The document to insert.
+ * @returns {Promise<string>} - A promise that resolves with the ID of the inserted document.
+ */
+async function insert(collectionName, document) {
+	try {
+		const collection = await get(collectionName);
+		const result = await collection.insertOne(document);
+		return result.insertedId;
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
-async function countDocuments(collectionName, query) {
-    const collection = client.db().collection(collectionName);
-    try {
-        return await collection.countDocuments(query);
-    } catch (err) {
-        console.error(err);
-        return 0;
-    }
+/**
+ * Inserts multiple documents into a collection in the MongoDB database.
+ * @param {string} collectionName - The name of the collection to insert the documents into.
+ * @param {object[]} documents - The documents to insert.
+ * @returns {Promise<string[]>} - A promise that resolves with an array of IDs of the inserted documents.
+ */
+async function inserts(collectionName, documents) {
+	try {
+		const collection = await get(collectionName);
+		const result = await collection.insertMany(documents);
+		return result.insertedIds;
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
-async function updateDocument(collectionName, filter, update) {
-    const collection = client.db().collection(collectionName);
-    try {
-        const result = await collection.updateOne(filter, update);
-        return result.modifiedCount;
-    } catch (err) {
-        console.error(err);
-        return 0;
-    }
+/**
+ * Finds documents in a collection in the MongoDB database that match the specified query.
+ * @param {string} collectionName - The name of the collection to search.
+ * @param {object} query - The query to execute.
+ * @returns {Promise<object[]>} - A promise that resolves with an array of documents that match the query.
+ */
+async function find(collectionName, query) {
+	try {
+		const collection = await get(collectionName);
+		const cursor = collection.find(query);
+		return await cursor.toArray();
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
-async function deleteDocument(collectionName, filter) {
-    const collection = client.db().collection(collectionName);
-    try {
-        const result = await collection.deleteOne(filter);
-        return result.deletedCount;
-    } catch (err) {
-        console.error(err);
-        return 0;
-    }
+/**
+ * Finds a single document in a collection in the MongoDB database that matches the specified query.
+ * @param {string} collectionName - The name of the collection to search.
+ * @param {object} query - The query to execute.
+ * @returns {Promise<object>} - A promise that resolves with the first document that matches the query.
+ */
+async function findOne(collectionName, query) {
+	try {
+		const collection = await get(collectionName);
+		return await collection.findOne(query);
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
-async function aggregateDocuments(collectionName, pipeline) {
-    const collection = client.db().collection(collectionName);
-    try {
-        const cursor = collection.aggregate(pipeline);
-        return await cursor.toArray();
-    } catch (err) {
-        console.error(err);
-        return [];
-    }
+/**
+ * Updates a single document in a collection in the MongoDB database that matches the specified filter.
+ * @param {string} collectionName - The name of the collection to update.
+ * @param {object} filter - The filter to apply.
+ * @param {object} update - The update to apply.
+ * @returns {Promise<number>} - A promise that resolves with the number of documents that were modified.
+ */
+async function updateOne(collectionName, filter, update) {
+	try {
+		const collection = await get(collectionName);
+		const result = await collection.updateOne(filter, update);
+		return result.modifiedCount;
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
+/**
+ * Deletes a single document from a collection in the MongoDB database that matches the specified filter.
+ * @param {string} collectionName - The name of the collection to delete from.
+ * @param {object} filter - The filter to apply.
+ * @returns {Promise<number>} - A promise that resolves with the number of documents that were deleted.
+ */
+async function deleteOne(collectionName, filter) {
+	try {
+		const collection = await get(collectionName);
+		const result = await collection.deleteOne(filter);
+		return result.deletedCount;
+	} catch (err) {
+		error(err);
+		throw err;
+	}
+}
+
+/**
+ * Deletes multiple documents from a collection in the MongoDB database that match the specified filter.
+ * @param {string} collectionName - The name of the collection to delete from.
+ * @param {object} filter - The filter to apply.
+ * @returns {Promise<number>} - A promise that resolves with the number of documents that were deleted.
+ */
+async function deleteMany(collectionName, filter) {
+	try {
+		const collection = await get(collectionName);
+		const result = await collection.deleteMany(filter);
+		return result.deletedCount;
+	} catch (err) {
+		error(err);
+		throw err;
+	}
+}
+
+/**
+ * Executes an aggregation pipeline on a collection in the MongoDB database.
+ * @param {string} collectionName - The name of the collection to aggregate.
+ * @param {object[]} pipeline - The pipeline to execute.
+ * @returns {Promise<object[]>} - A promise that resolves with the results of the aggregation.
+ */
+async function aggregate(collectionName, pipeline) {
+	try {
+		const collection = await get(collectionName);
+		const cursor = collection.aggregate(pipeline);
+		return await cursor.toArray();
+	} catch (err) {
+		error(err);
+		throw err;
+	}
+}
+
+/**
+ * Creates an index on a collection in the MongoDB database.
+ * @param {string} collectionName - The name of the collection to create the index on.
+ * @param {object} keys - The keys to index.
+ * @param {object} options - The options for the index.
+ * @returns {Promise<string>} - A promise that resolves with the name of the created index.
+ */
 async function createIndex(collectionName, keys, options) {
-    const collection = client.db().collection(collectionName);
-    try {
-        return await collection.createIndex(keys, options);
-    } catch (err) {
-        console.error(err);
-        return null;
-    }
+	try {
+		const collection = await get(collectionName);
+		return await collection.createIndex(keys, options);
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
-async function isCollectionEmpty(collectionName) {
-    const collection = client.db().collection(collectionName);
-    try {
-        const count = await collection.countDocuments();
-        return count === 0;
-    } catch (err) {
-        console.error(err);
-        return null;
-    }
+/**
+ * Checks if a collection in the MongoDB database is empty.
+ * @param {string} collectionName - The name of the collection to check.
+ * @returns {Promise<boolean>} - A promise that resolves with a boolean indicating whether the collection is empty.
+ */
+async function isEmpty(collectionName) {
+	try {
+		const collection = await get(collectionName);
+		const count = await collection.countDocuments();
+		return count === 0;
+	} catch (err) {
+		error(err);
+		throw err;
+	}
+}
+
+/**
+ * Deletes all documents from a collection in the MongoDB database.
+ * @param {string} collectionName - The name of the collection to delete from.
+ * @returns {Promise<number>} - A promise that resolves with the number of documents that were deleted.
+ */
+async function purge(collectionName) {
+	try {
+		const collection = await get(collectionName);
+		const result = await collection.deleteMany({});
+		return result.deletedCount;
+	} catch (err) {
+		error(err);
+		throw err;
+	}
 }
 
 module.exports = {
-    createCollection,
-    disposeConnection,
-    insertDocument,
-    insertDocuments,
-    findDocuments,
-    findAllDocuments,
-    findOneDocument,
-    countDocuments,
-    updateDocument,
-    deleteDocument,
-    aggregateDocuments,
-    createIndex,
-    isCollectionEmpty,
+	connect,
+	dispose,
+	create,
+	get,
+	getContents,
+	getLength,
+	insert,
+	inserts,
+	find,
+	findOne,
+	updateOne,
+	deleteOne,
+	deleteMany,
+	aggregate,
+	createIndex,
+	isEmpty,
+	purge,
 };
