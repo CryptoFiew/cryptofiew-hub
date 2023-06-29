@@ -14,7 +14,7 @@ const influx = new InfluxDB({
 	transportOptions: { agent },
 });
 
-const writeApi = influx.getWriteApi(influxOrg, influxBucket, 'ns');
+const writeApi = influx.getWriteApi(influxOrg, influxBucket);
 const queryApi = influx.getQueryApi(influxOrg);
 
 process.on('exit', () => agent.destroy());
@@ -26,14 +26,11 @@ process.on('exit', () => agent.destroy());
  */
 const writeData = (points) =>
 	Promise.resolve()
-		.then(() => {
-			points.forEach((point) => writeApi.writePoint(point));
-			writeApi.flush();
-		})
+		.then(() => points.forEach((point) => writeApi.writePoint(point)))
 		.catch((err) => {
 			logger.error(`Error writing data points to InfluxDB: ${err.message}`);
 			throw err;
-		});
+		}).finally(() => writeApi.flush());
 
 /**
  * Queries data from InfluxDB using the specified query.

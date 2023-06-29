@@ -61,36 +61,46 @@ const sendQueue = (queueName, message, priority = 0, expiration) => {
 };
 
 /**
- * Consumes messages from a queue.
+ * Consumes messages from a queue until the application is about to exit.
  * @param {string} queueName - The name of the queue to consume messages from.
  * @param {Function} callback - The callback function to call when a message is received.
- * @param {object} [options={}] - The options for consuming messages.
- * @returns {Promise} A promise that resolves when consuming is completed or is manually canceled.
+ * @returns {Promise} A promise that resolves when the application is about to exit.
  */
-const consumeQueuePromise = (queueName, callback, options = {}) => {
-	options = { ...options, noAck: true };
+const consumeQueuePromise = (queueName, callback) => {
+	/**
+	 * Promise that resolves when the consume process is about to exit.
+	 * @type {Promise<void>}
+	 */
+	let consumePromise;
 
 	return new Promise((resolve, reject) => {
-		const consumerTag = channelWrapper.consume(
-			queueName,
-			(message) => {
-				Promise.resolve(callback(message))
-					.then(() => {
-						channelWrapper.ack(message);
-					})
-					.catch((error) => {
-						logger.error('Error processing message:', error);
-						channelWrapper.nack(message);
-					});
-			},
-			options
-		);
+		channelWrapper.addSetup((channel) => {
+			channel.assertQueue(queueName, { durable: true });
 
-		if (consumerTag) {
-			resolve();
-		} else {
-			reject(new Error(`Failed to consume messages from queue ${queueName}`));
-		}
+			consumePromise = new Promise((consumeResolve, consumeReject) => {
+				channel.consume(queueName, async (message) => {
+					try {
+						await callback(message);
+					} catch (error) {
+						reject(error);
+					}
+				}, { noAck: true });  // Set noAck to true for auto-acknowledgment
+
+				/**
+				 * Event handler for beforeExit event that cancels all consumers and resolves the consumePromise.
+				 */
+				const beforeExitHandler = () => {
+					channel.cancelAllConsumers();
+					consumeResolve();
+				};
+
+				// Register the beforeExit event handler
+				process.on('beforeExit', beforeExitHandler);
+			});
+
+			// Resolve the outer promise with the consumePromise
+			resolve(consumePromise);
+		});
 	});
 };
 

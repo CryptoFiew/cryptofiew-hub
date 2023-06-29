@@ -1,6 +1,38 @@
-const { map } = require('ramda');
-const logger = require('./logger');
+const logger = require("./logger");
+const R = require("ramda");
 
+/**
+ * Convert a timestamp to nanoseconds.
+ * @param {Date|number} timestamp The timestamp to convert. Can be a Date object, or a numeric value representing seconds/milliseconds since the epoch.
+ * @param {string} targetUnit The target unit to convert to. Allowed values: 'ns', 'us', 'ms', 's'.
+ * @returns {Maybe} The converted timestamp in nanoseconds wrapped in a Maybe monad.
+ */
+const convertToNs = (timestamp, targetUnit) => {
+	const units = { ns: 1, us: 1000, ms: 1000000, s: 1000000000 };
+
+	const { Maybe, Just, Nothing } = require('./monads'); // Replace './monads' with the path to your custom Maybe monad implementation
+
+	const toNanoseconds = value => {
+		return Maybe(value).map(R.multiply(units[targetUnit]));
+	};
+
+	const toDate = value => {
+		return Maybe(value).chain(timestamp => {
+			if (typeof timestamp === 'number') {
+				return Just(new Date(timestamp));
+			}
+			return Nothing();
+		});
+	};
+
+	if (timestamp instanceof Date) {
+		return toNanoseconds(timestamp.getTime());
+	} else if (typeof timestamp === 'number') {
+		return toNanoseconds(timestamp);
+	} else {
+		return Nothing();
+	}
+};
 /**
  * Checks if two arrays are equal.
  * @param {any[]} arr1 - The first array.
@@ -19,7 +51,6 @@ const arraysEqual = (arr1, arr2) =>
  */
 const calculateKlines = (intervals, numDays) => {
 	const secondsInDay = 86400;
-
 	/**
 	 * Calculates the duration of an interval in seconds.
 	 * @param {string} interval - The interval to calculate.
@@ -68,7 +99,23 @@ const calculateKlines = (intervals, numDays) => {
 		return [interval, limitNumIntervals(numIntervals)];
 	};
 
-	return Object.fromEntries(map(calculateInterval, intervals));
+	return Object.fromEntries(intervals.map(calculateInterval));
+};
+
+/**
+ * Transforms each element in an array using a transformation function.
+ *
+ * @template T, U
+ * @param {T[]} array - The input array.
+ * @param {function(T, number, T[]): U} transformFn - The transformation function.
+ * @returns {U[]} - The new array with transformed values.
+ */
+const map = (array, transformFn) => {
+	const result = [];
+	for (let i = 0; i < array.length; i++) {
+		result.push(transformFn(array[i], i, array));
+	}
+	return result;
 };
 
 /**
@@ -78,19 +125,21 @@ const calculateKlines = (intervals, numDays) => {
  * @param {(...args: any[]) => void} fn - The function to be promisified.
  * @returns {(...args: any[]) => Promise<T>} The promisified function.
  */
-const promisify = (fn) => (...args) =>
-	new Promise((resolve, reject) =>
+const promisify = (fn) => (...args) => {
+	return new Promise((resolve, reject) => {
 		fn(...args, (error, result) => {
 			if (error) {
 				reject(error);
 			} else {
 				resolve(result);
 			}
-		})
-	);
+		});
+	});
+};
 
 module.exports = {
 	arraysEqual,
 	calculateKlines,
 	promisify,
+	convertToNs,
 };
