@@ -11,20 +11,17 @@ const logger = require("../utils/logger");
 async function addWatch(symbols) {
 	try {
 		const intervals = await redis.getList(redisIntervals);
-
 		const watchIntervals = intervals.length ? intervals : klinesIntervals;
 
-		symbols.forEach(symbol => {
-			if (webSocket.isSubscribed(symbol)) {
-				return;
+		const subscribeIfNeeded = (symbol) => {
+			if (!webSocket.isSubscribed(symbol)) {
+				logger.debug(`Adding watch for symbol ${symbol}`);
+				return webSocket.connect()
+					.then((stream) => webSocket.subscribe(stream, symbol, watchIntervals));
 			}
+		};
 
-			logger.debug(`Adding watch for symbol ${symbol}`);
-			webSocket.connect()
-				.then((stream) => {
-					webSocket.subscribe(stream, symbol, watchIntervals);
-				});
-		});
+		await Promise.all(symbols.map(subscribeIfNeeded));
 	} catch (err) {
 		logger.error(`Error getting intervals hash: ${err.message}`);
 	}
@@ -37,28 +34,32 @@ async function addWatch(symbols) {
 function delWatch(symbols) {
 	logger.debug(`Deleting watch for symbols: ${symbols.join(', ')}`);
 
-	for (const symbol of symbols) {
+	symbols.forEach((symbol) => {
 		if (webSocket.isSubscribed(symbol)) {
 			logger.debug(`Killing WebSocket client process for symbol ${symbol}`);
 			webSocket.disconnect(symbol);
 		} else {
 			logger.debug(`No WebSocket client process running for symbol ${symbol}`);
 		}
-	}
+	});
 }
 
 /**
  * Shuts down the application.
  */
-function shutdown() {
-	logger.debug('Shutting down...');
-	setTimeout(() => webSocket.disconnectAll(), 5_000);
-	rabbit.disposeConnection().then(() => {
-		console.log('Disconnected from RabbitMQ');
-		process.exit(0);
-	});
-}
+async function shutdown() {
 
+	logger.debug('Closing connection to WebSocket and RabbitMQ...');
+	await new Promise((resolve) => setTimeout(resolve, 5000));
+
+	const disconnectWebSocket = webSocket.disconnectAll();
+	const disposeRabbitMQ = rabbit.disposeConnection();
+
+	await Promise.all([disconnectWebSocket, disposeRabbitMQ]);
+
+	logger.debug('Buh Bye');
+	process.exit(0);
+}
 module.exports = {
 	addWatch,
 	delWatch,
