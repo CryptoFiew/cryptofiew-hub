@@ -29,7 +29,8 @@ const logToFile = (filePath, logMessage) => {
 // Logging functions
 const debugWhoLetTheBugsOut = (message) => {
 	if (isDebug) {
-		const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous')).map(line => line.trim().replace(/^at /, ''));
+		const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous'))
+			.map(line => line.trim().replace(/^at /, ''));
 		const caller = stack[0];
 		const formattedMessage = formatLogMessage('🐞🚪', message, caller);
 		console.debug(formattedMessage);
@@ -38,7 +39,8 @@ const debugWhoLetTheBugsOut = (message) => {
 
 const infoWhoLetTheLogsOut = (message) => {
 	if (isDebug) {
-		const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous')).map(line => line.trim().replace(/^at /, ''));
+		const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous'))
+			.map(line => line.trim().replace(/^at /, ''));
 		const caller = stack[0];
 		const formattedMessage = formatLogMessage('📝ℹ️', message, caller);
 		console.info(formattedMessage);
@@ -46,7 +48,8 @@ const infoWhoLetTheLogsOut = (message) => {
 };
 
 const warnWhoLetTheDogsOut = (message) => {
-	const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous')).map(line => line.trim().replace(/^at /, ''));
+	const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous'))
+		.map(line => line.trim().replace(/^at /, ''));
 	const caller = stack[0];
 	const formattedMessage = formatLogMessage('🐶🚪', message, caller);
 	console.warn(formattedMessage);
@@ -58,7 +61,8 @@ const warnWhoLetTheDogsOut = (message) => {
 };
 
 const errorWhoLetTheErrorsOut = (message) => {
-	const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous')).map(line => line.trim().replace(/^at /, ''));
+	const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous'))
+		.map(line => line.trim().replace(/^at /, ''));
 	const caller = stack[0];
 	const formattedMessage = formatLogMessage('🔥🚨', message, caller);
 	console.error(formattedMessage);

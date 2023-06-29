@@ -2,6 +2,7 @@ const amqp = require('amqp-connection-manager');
 const logger = require('../utils/logger');
 
 const env = require('../env');
+const {promisify} = require("../utils/utils");
 
 // Set up connection manager
 const connectionManager = amqp.connect([env.rabbitmqUrl]);
@@ -15,6 +16,7 @@ connectionManager.on('connect', () => {
 
 /**
  * Handles disconnection errors.
+ * @param {Error} err - The disconnection error.
  */
 connectionManager.on('disconnect', (err) => {
 	logger.error('Disconnected from RabbitMQ:', err.stack);
@@ -25,21 +27,21 @@ const channelWrapper = connectionManager.createChannel({
 	json: true,
 	setup: (ch) => {
 		ch.assertQueue(env.wsBinance, { durable: true });
-	}
+	},
 });
 
 // Create a channel for sending messages
-const sendChannel = channelWrapper
+const sendChannel = channelWrapper;
 
 /**
  * Sends a message to a queue.
  * @param {string} queueName - The name of the queue to send the message to.
  * @param {object} message - The message to send.
- * @param {number} priority - The priority of the message.
- * @param {number} expiration - The expiration time of the message.
- * @param {function} callback - The callback function to call when the message is sent.
+ * @param {number} [priority=0] - The priority of the message.
+ * @param {number} [expiration] - The expiration time of the message.
+ * @returns {Promise} A promise that resolves when the message is sent successfully.
  */
-function sendQueue(queueName, message, priority = 0, expiration = undefined, callback) {
+const sendQueue = (queueName, message, priority = 0, expiration) => {
 	const options = {
 		persistent: true,
 		priority,
@@ -48,76 +50,62 @@ function sendQueue(queueName, message, priority = 0, expiration = undefined, cal
 		options.expiration = expiration;
 	}
 
-	// Send the message to the queue using the sendChannel
-	const sent = sendChannel.sendToQueue(queueName, message, options);
+	return promisify(sendChannel.sendToQueue.bind(sendChannel))(queueName, message, options)
+		.then(() => {
+			/* Message sent successfully */
+		})
+		.catch((error) => {
+			logger.error(`Failed to send message to queue ${queueName}: ${error.message}`);
+			throw error;
+		});
+};
 
-	if (!sent) {
-		const error = new Error(`Failed to send message to queue ${queueName}`);
-		logger.error(error.message);
-		return callback(error);
-	}
-
-	return callback(null);
-}
 /**
  * Consumes messages from a queue.
  * @param {string} queueName - The name of the queue to consume messages from.
- * @param {function} callback - The callback function to call when a message is received.
- * @param {object} options - The options for consuming messages.
- * @returns {object} - The consumer tag.
+ * @param {Function} callback - The callback function to call when a message is received.
+ * @param {object} [options={}] - The options for consuming messages.
+ * @returns {Promise} A promise that resolves when consuming is completed or is manually canceled.
  */
-function consumeQueue(queueName, callback, options = {}) {
-	options = { ...options, noAck: true }
-	return channelWrapper.consume(queueName, (message) => {
-		callback(message)
-			.then(() => {
-				channelWrapper.ack(message);
-			})
-			.catch((error) => {
-				logger.error('Error processing message:', error);
-				channelWrapper.nack(message);
-			});
-	}, options);
-}
+const consumeQueuePromise = (queueName, callback, options = {}) => {
+	options = { ...options, noAck: true };
 
-/**
- * Consumes messages from a queue and returns a promise.
- * @param {string} queueName - The name of the queue to consume messages from.
- * @param {function} callback - The callback function to call when a message is received.
- * @param {object} options - The options for consuming messages.
- * @returns {Promise<void>} - A promise that resolves when all messages have been consumed.
- */
-function consumeQueuePromise(queueName, callback, options = { }) {
-	options = { ...options, noAck: true }
 	return new Promise((resolve, reject) => {
-		const consumerTag = channelWrapper.consume(queueName, (message) => {
-			logger.debug('Calling!');
-			Promise.resolve(callback(message))
-				.then(() => {
-					resolve();
-				})
-				.catch((error) => {
-					logger.error('Error processing message:', error);
-					reject(error);
-				});
-		}, options);
-		if (!consumerTag) {
+		const consumerTag = channelWrapper.consume(
+			queueName,
+			(message) => {
+				Promise.resolve(callback(message))
+					.then(() => {
+						channelWrapper.ack(message);
+					})
+					.catch((error) => {
+						logger.error('Error processing message:', error);
+						channelWrapper.nack(message);
+					});
+			},
+			options
+		);
+
+		if (consumerTag) {
+			resolve();
+		} else {
 			reject(new Error(`Failed to consume messages from queue ${queueName}`));
 		}
 	});
-}
+};
 
 /**
  * Closes the connection manager.
- * @returns {Promise<void>} - A promise that resolves when the connection manager has been closed.
+ * @returns {Promise} A promise that resolves when the connection manager has been closed.
  */
-function disposeConnection() {
-	return connectionManager.close();
-}
+const disposeConnection = () =>
+	new Promise((resolve) => {
+		connectionManager.close();
+		resolve();
+	});
 
 module.exports = {
 	sendQueue,
-	consumeQueue,
 	consumeQueuePromise,
 	disposeConnection,
 };

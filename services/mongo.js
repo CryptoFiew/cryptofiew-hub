@@ -283,6 +283,59 @@ async function purge(collectionName) {
 	}
 }
 
+/**
+ * Initializes MongoDB by creating the 'intervals' collection,
+ * updating the interval list, and publishing the list to Redis.
+ * @returns {Array<string>} The list of intervals.
+ */
+async function warmup() {
+	await mongo.connect();
+	const intervals = env.klinesIntervals;
+
+	// Create the 'intervals' collection in MongoDB
+	await mongo.create('intervals');
+	logger.debug('Created or found "intervals" collection in MongoDB.');
+
+	// Flush Redis
+	await redis.pub.flushdb('SYNC', (error, result) => {
+		if (error) {
+			logger.error(`Error flushing Redis: ${error.message}`);
+		} else {
+			logger.info(`Flushed Redis: ${result}`);
+		}
+	});
+
+	// Update the interval list in MongoDB
+	const intervalListEmpty = await mongo.isEmpty('intervals');
+	const mongoIntervals = await mongo.getContents('intervals');
+	const currentIntervals = mongoIntervals.map((item) => item.interval);
+	logger.debug(`currentIntervals: \n${JSON.stringify(currentIntervals)}`);
+
+	let returnIntervals;
+	if (intervalListEmpty || !arraysEqual(intervals, currentIntervals)) {
+		logger.debug('Updating interval list in MongoDB.');
+		await mongo.purge('intervals');
+		await mongo.inserts('intervals', intervals.map((interval) => ({ interval })));
+		logger.debug(`Setting new intervals to key ${env.redisIntervals}`);
+		logger.debug(`[C] Setting return intervals: ${intervals}`);
+		returnIntervals = intervals;
+	} else {
+		logger.debug(`[N] Setting return intervals: ${JSON.stringify(currentIntervals)}`);
+		returnIntervals = currentIntervals;
+		logger.info('Skipping update - interval list has not changed.');
+	}
+
+	// Publish the interval list to the 'intervals' channel
+	const channel = env.redisMinionChan;
+	const message = { type: 'intervals', data: intervals };
+	redis.pub.publish(channel, JSON.stringify(message));
+	logger.info(`Publish new intervals list to ${env.redisMinionChan}`);
+	redis.lPop(env.redisIntervals, 20);
+	redis.lPush(env.redisIntervals, returnIntervals);
+
+	return returnIntervals;
+}
+
 module.exports = {
 	connect,
 	dispose,
@@ -301,4 +354,5 @@ module.exports = {
 	createIndex,
 	isEmpty,
 	purge,
+	warmup,
 };

@@ -1,13 +1,10 @@
 const { Agent } = require('http');
-const { InfluxDB, Point, DEFAULT_WriteOptions} = require('@influxdata/influxdb-client');
+const { InfluxDB, Point } = require('@influxdata/influxdb-client');
 const { influxUrl, influxToken, influxOrg, influxBucket } = require('../env');
 const logger = require("../utils/logger");
-const {error} = require("../utils/logger");
-
 
 const agent = new Agent({
 	keepAlive: true, // Reuse existing connection
-  // keepALiveMsecs: 30 * 1000, // 30 seconds keep alive
 });
 
 // Create a new InfluxDB client instance
@@ -18,42 +15,45 @@ const influx = new InfluxDB({
 });
 
 const writeApi = influx.getWriteApi(influxOrg, influxBucket, 'ns');
-
 const queryApi = influx.getQueryApi(influxOrg);
 
 process.on('exit', () => agent.destroy());
-
 
 /**
  * Writes data points to InfluxDB.
  * @param {Point[]} points - The data points to write.
  * @returns {Promise<void>} - A promise that resolves when the write is complete.
  */
-async function writeData(points) {
-	try{
-    writeApi.writePoints(points);
-		return await writeApi.flush();
-	} catch (err) {
-		logger.error(`Error writing data points to InfluxDB: ${err.message}`);
-		throw err;
-	}
-}
+const writeData = (points) =>
+	Promise.resolve()
+		.then(() => {
+			points.forEach((point) => writeApi.writePoint(point));
+			writeApi.flush();
+		})
+		.catch((err) => {
+			logger.error(`Error writing data points to InfluxDB: ${err.message}`);
+			throw err;
+		});
 
 /**
  * Queries data from InfluxDB using the specified query.
  * @param {string} query - The InfluxQL query to execute.
  * @returns {Promise<object[]>} - A promise that resolves with an array of query results.
  */
-function queryData(query) {
-	return queryApi.collectRows(query);
-}
+const queryData = (query) =>
+	queryApi
+		.collectRows(query)
+		.catch((err) => {
+			logger.error(`Error querying data from InfluxDB: ${err.message}`);
+			throw err;
+		});
 
 /**
  * Queries the latest data point for the specified metric from InfluxDB.
  * @param {string} metric - The metric to query the latest data point for.
  * @returns {Promise<object>} - A promise that resolves with an object containing the timestamp, symbol, and interval of the latest data point.
  */
-function queryLatestDataPoint(metric) {
+const queryLatestDataPoint = (metric) => {
 	const query = `
     from(bucket: "${influxBucket}")
       |> range(start: -1h)
@@ -71,10 +71,10 @@ function queryLatestDataPoint(metric) {
 			};
 		})
 		.catch((err) => {
-			error(`Error querying latest data point for metric ${metric}: ${err.message}`);
+			logger.error(`Error querying latest data point for metric ${metric}: ${err.message}`);
 			throw err;
 		});
-}
+};
 
 module.exports = {
 	writeData,
