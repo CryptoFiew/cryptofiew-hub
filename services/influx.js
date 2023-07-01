@@ -73,8 +73,19 @@ const queryLatestDataPoint = (metric) => {
 		});
 };
 
+const queryMetricData = (metric) => {
+	const query = `from(bucket: "${influxBucket}") |> range(start: -1d) |> filter(fn: (r) => r._measurement == "${metric}"}`;
+	const result = [];
+	const tables = queryApi.collectRows(query);
+	for (table in tables) {
+		result.push(table);
+	}
+	return result;
+}
+
 module.exports = {
 	writeData,
 	queryData,
+	queryMetricData,
 	queryLatestDataPoint,
 };

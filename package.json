@@ -1,5 +1,5 @@
 {
-  "name": "crypto-pulse-minions",
+  "name": "cryptofiew-hub",
   "version": "1.0.0",
   "description": "Express application that monitor cryptos and store data inside redis and InfluxDB",
   "author": "P3nj <penguinjoints@icloud.com>",
@@ -11,7 +11,7 @@
   "main": "index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/StockFiew/crypto-pulse-minions.git"
+    "url": "https://github.com/CryptoFiew/cryptofiew-hub.git"
   },
   "scripts": {
     "start": "node index.js",
