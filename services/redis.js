@@ -1,101 +1,84 @@
 const Redis = require('ioredis');
 const env = require('../env');
-const logger = require("../utils/logger");
+const logger = require('../utils/logger');
+const { promisify } = require('util');
 
 const redisConfig = {
-    host: env.redisHost,
-    port: env.redisPort,
-    password: env.redisPass || null,
+	host: env.redisHost,
+	port: env.redisPort,
+	password: env.redisPass || null,
 };
 
 const pubClient = new Redis(redisConfig);
 const subClient = new Redis(redisConfig);
 
-/**
- * Removes items from a Redis list by value.
- *
- * @param {string} key - The key of the Redis list.
- * @param {...string} items - The values to be removed from the list.
- * @returns {undefined}
- */
-const removeFromList = (key, ...items) => {
-  pubClient.lrange(key, 0, -1, (error, result) => {
-    if (error) {
-      logger.error(error);
-    } else {
-      const itemsToRemove = result.filter((item) => items.includes(item));
-      if (itemsToRemove.length > 0) {
-        pubClient.lrem(key, itemsToRemove.length, ...itemsToRemove, (error, result) => {
-          if (error) {
-            logger.error(error);
-          } else {
-            logger.debug(`Removed ${result} items from list ${key}: ${itemsToRemove}`);
-          }
-        });
-      } else {
-        logger.debug(`No items found in list ${key}: ${items}`);
-      }
-    }
-  });
-}
+const promisifyCommands = ['lrange', 'lrem', 'lpush', 'lpop'];
 
+promisifyCommands.forEach((command) => {
+	pubClient[command] = promisify(pubClient[command]).bind(pubClient);
+});
+
+const removeFromList = async (key, ...items) => {
+	try {
+		const result = await pubClient.lrange(key, 0, -1);
+		const itemsToRemove = result.filter((item) => items.includes(item));
+		if (itemsToRemove.length > 0) {
+			const numRemoved = await pubClient.lrem(key, 0, ...itemsToRemove);
+			logger.debug(`Removed ${numRemoved} items from list ${key}: ${itemsToRemove}`);
+		} else {
+			logger.debug(`No items found in list ${key}: ${items}`);
+		}
+	} catch (error) {
+		logger.error(error);
+	}
+};
 
 const getList = async (key) => {
-	logger.debug(pubClient.status)
 	try {
-		return await pubClient.lrange(key, 0, -1, (error, result) => {
-			logger.debug(JSON.stringify(result));
-			return result;
-		});
+		const result = await pubClient.lrange(key, 0, -1);
+		if (result.length === 0) {
+			logger.debug(`No list found for key: ${key}`);
+		}
+		return result;
 	} catch (error) {
 		logger.error(error);
 		return [];
 	}
 };
 
-const lPush = (key, values) => {
+const lPush = async (key, ...values) => {
 	try {
-		return pubClient.lpush(key, values);
+		return await pubClient.lpush(key, ...values);
 	} catch (error) {
 		logger.error(error);
 		return 0;
 	}
-}
+};
 
-const lPop = (key, length) => {
+const lPop = async (key, length = 1) => {
 	try {
-		return pubClient.lpop(key, length);
-	} catch(error) {
-		logger.error(error)
-		return 0;
+		return await pubClient.lpop(key, length);
+	} catch (error) {
+		logger.error(error);
+		return null;
 	}
-}
+};
 
-const lRem = async (key, values) => {
-	for (const value of values) {
-		const numRemoved = await pubClient.lrem(key, 0, value);
-		logger.info(`Removed ${numRemoved} occurrencess of ${value} from list ${key}`)
-	}
-}
-
-// Handle Redis connection errors
 pubClient.on('error', (err) => {
-    logger.error(`Error connecting to Redis: ${err}`);
+	logger.error(`Error connecting to Redis: ${err}`);
 });
 
 subClient.on('error', (err) => {
-    logger.error(`Error connecting to Redis: ${err}`);
+	logger.error(`Error connecting to Redis: ${err}`);
 });
 
-
-
 module.exports = {
-  redis: {
-    pub: pubClient,
-    sub: subClient,
+	redis: {
+		pub: pubClient,
+		sub: subClient,
 		lPush,
 		lPop,
-    getList,
-    remove: removeFromList,
-  },
+		getList,
+		remove: removeFromList,
+	},
 };

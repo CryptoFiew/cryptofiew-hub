@@ -22,6 +22,7 @@
     "@binance/connector": "^3.0.0-rc.2",
     "@influxdata/influxdb-client": "^1.33.2",
     "@influxdata/influxdb-client-apis": "^1.33.2",
+    "@sniptt/monads": "^0.5.10",
     "amqp-connection-manager": "^4.1.13",
     "amqplib": "^0.10.3",
     "console": "^0.7.2",
@@ -38,6 +39,7 @@
     "pino": "^8.14.1",
     "pino-http": "^8.3.3",
     "pino-pretty": "^10.0.0",
+    "ramda": "^0.29.0",
     "requests": "^0.3.0",
     "socket.io": "^4.6.2",
     "uuid": "^9.0.0"

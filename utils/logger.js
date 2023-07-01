@@ -1,126 +1,115 @@
 const fs = require("fs");
 const path = require('path');
 const env = require("../env");
+const monads = require('@sniptt/monads');
+const { Ok, Err } = monads;
 
-/**
- * Determines whether the environment is in debug mode.
- * @type {boolean}
- */
+// Constants
 const isDebug = env.debug;
-
-/**
- * The directory path for log files.
- * @type {string}
- */
 const logsDir = path.join(__dirname, '../logs');
-
-/**
- * The path for the warn log file.
- * @type {string}
- */
 const warnLogPath = path.join(logsDir, 'warn.log');
-
-/**
- * The path for the error log file.
- * @type {string}
- */
 const errorLogPath = path.join(logsDir, 'error.log');
 
-/**
- * Creates a directory if it does not exist.
- * @param {string} dirPath - The path of the directory to create.
- */
-function createDirectory(dirPath) {
-	if (!fs.existsSync(dirPath)) {
-		fs.mkdirSync(dirPath, { recursive: true });
+// Utility functions
+const createDirectory = (dirPath) => {
+	try {
+		if (!fs.existsSync(dirPath)) {
+			fs.mkdirSync(dirPath, { recursive: true });
+		}
+		return Ok(null);
+	} catch (error) {
+		return Err(error);
 	}
-}
+};
 
-/**
- * Logs a debug message with the file path and line number of the calling function.
- * @param {string} message - The message to log.
- */
-function debugWhoLetTheBugsOut(message) {
-	if (isDebug) {
-		const stack = new Error().stack.split('\n').slice(2);
-		const tree = stack.filter(line => !line.includes('anonymous')).map(line => line.trim().replace(/^at /, ''));
-		const caller = tree[0];
-		const [filePath, lineNumber] = caller.split(':');
-		const shortFilePath = filePath.split('/').slice(-2).join('/');
-		const formattedMessage = `🐞🚪 [${shortFilePath}:${lineNumber}]\n - ${message}\n`;
-		console.debug(formattedMessage);
-	}
-}
-
-/**
- * Logs an info message with the file path and line number of the calling function.
- * @param {string} message - The message to log.
- */
-function infoWhoLetTheLogsOut(message) {
-	if (isDebug) {
-		const stack = new Error().stack.split('\n').slice(2);
-		const tree = stack.filter(line => !line.includes('anonymous')).map(line => line.trim().replace(/^at /, ''));
-		const caller = tree[0];
-		const [filePath, lineNumber] = caller.split(':');
-		const shortFilePath = filePath.split('/').slice(-2).join('/');
-		const formattedMessage = `📝ℹ️ [${shortFilePath}:${lineNumber}]\n - ${message}\n`;
-		console.info(formattedMessage);
-	}
-}
-
-/**
- * Logs a warning message with the file path and line number of the calling function.
- * @param {string} message - The message to log.
- */
-function warnWhoLetTheDogsOut(message) {
-	const stack = new Error().stack.split('\n').slice(2);
-	const tree = stack.filter(line => !line.includes('anonymous')).map(line => line.trim().replace(/^at /, ''));
-	const caller = tree[0];
+const formatLogMessage = (prefix, message, caller) => {
 	const [filePath, lineNumber] = caller.split(':');
 	const shortFilePath = filePath.split('/').slice(-2).join('/');
-	const formattedMessage = `🐶🚪 [${shortFilePath}:${lineNumber}]\n - ${message}\n`;
+	return `${prefix} [${shortFilePath}:${lineNumber}]\n - ${message}\n`;
+};
+
+const logToFile = (filePath, logMessage) => {
+	try {
+		createDirectory(path.dirname(filePath));
+		fs.appendFileSync(filePath, logMessage);
+		return Ok(null);
+	} catch (error) {
+		return Err(error);
+	}
+};
+
+// Logging functions
+const debugWhoLetTheBugsOut = (message) => {
+	if (isDebug) {
+		const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous'))
+			.map(line => line.trim().replace(/^at /, ''));
+		const caller = stack[0];
+		const formattedMessage = formatLogMessage('🐞🚪', message, caller);
+		console.debug(formattedMessage);
+		return Ok(null);
+	} else {
+		return Err(null);
+	}
+};
+
+const infoWhoLetTheLogsOut = (message) => {
+	if (isDebug) {
+		const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous'))
+			.map(line => line.trim().replace(/^at /, ''));
+		const caller = stack[0];
+		const formattedMessage = formatLogMessage('📝ℹ️', message, caller);
+		console.info(formattedMessage);
+		return Ok(null);
+	} else {
+		return Err(null);
+	}
+};
+
+/**
+ * Transforms the 'warnWhoLetTheDogsOut' function to return a Result.
+ *
+ * @param {string} message - The warning message.
+ * @returns {Result<null, any>} - The result indicating success or error.
+ */
+const warnWhoLetTheDogsOut = (message) => {
+	const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous'))
+		.map(line => line.trim().replace(/^at /, ''));
+	const caller = stack[0];
+	const formattedMessage = formatLogMessage('🐶🚪', message, caller);
 	console.warn(formattedMessage);
 
-	// Ensure log directory exists
-	createDirectory(logsDir);
-
-	// Ensure warn log file exists
-	createDirectory(path.dirname(warnLogPath));
-	if (!fs.existsSync(warnLogPath)) {
-		fs.writeFileSync(warnLogPath, '');
+	try {
+		createDirectory(logsDir);
+		createDirectory(path.dirname(warnLogPath));
+		logToFile(warnLogPath, `[${new Date().toISOString()}] ${formattedMessage}`);
+		return Ok(null);
+	} catch (error) {
+		return Err(error);
 	}
-
-	// Write to warn log file
-	const logMessage = `[${new Date().toISOString()}] ${formattedMessage}`;
-	fs.appendFileSync(warnLogPath, logMessage);
-}
+};
 
 /**
- * Logs an error message with the file path and line number of the calling function.
- * @param {string} message - The message to log.
+ * Transforms the 'errorWhoLetTheErrorsOut' function to return a Result.
+ *
+ * @param {string} message - The error message.
+ * @returns {Result<null, any>} - The result indicating success or error.
  */
-function errorWhoLetTheErrorsOut(message) {
-	const stack = new Error().stack.split('\n').slice(2);
-	const tree = stack.filter(line => !line.includes('anonymous')).map(line => line.trim().replace(/^at /, ''));
-	const caller = tree[0];
-	const [filePath, lineNumber] = caller.split(':');
-	const shortFilePath = filePath.split('/').slice(-2).join('/');
-	const formattedMessage = `🔥🚨 [${shortFilePath}:${lineNumber}]\n - ${message}\n`;
+const errorWhoLetTheErrorsOut = (message) => {
+	const stack = new Error().stack.split('\n').slice(2).filter(line => !line.includes('anonymous'))
+		.map(line => line.trim().replace(/^at /, ''));
+	const caller = stack[0];
+	const formattedMessage = formatLogMessage('🔥🚨', message, caller);
 	console.error(formattedMessage);
 
-	// Ensure log directory exists
-	createDirectory(logsDir);
-
-	// Ensure error log file exists
-	createDirectory(path.dirname(errorLogPath));
-	if (!fs.existsSync(errorLogPath)) {
-		fs.writeFileSync(errorLogPath, '');
+	try {
+		createDirectory(logsDir);
+		createDirectory(path.dirname(errorLogPath));
+		logToFile(errorLogPath, `[${new Date().toISOString()}] ${formattedMessage}`);
+		return Ok(null);
+	} catch (error) {
+		return Err(error);
 	}
-
-	// Write to error log file
-	const logMessage = `[${new Date().toISOString()}] ${formattedMessage}`;
-	fs.appendFileSync(errorLogPath, logMessage);
-}
+};
 
 module.exports = {
 	debug: debugWhoLetTheBugsOut,

@@ -1,8 +1,13 @@
-const { WebsocketStream } = require('@binance/connector');
+const { WebsocketStream, Spot} = require('@binance/connector');
 const { redis } = require('../services/redis');
 const rabbit = require("./rabbitmq");
 const logger = require('../utils/logger');
 const env = require("../env");
+const {writeData} = require("./influx");
+const {calculateKlines, convertToNs} = require("../utils/utils");
+const {Point} = require("@influxdata/influxdb-client");
+const {Ok, Err} = require("@sniptt/monads");
+const client = new Spot();
 
 
 // Define callbacks for handling WebSocket stream events
@@ -70,7 +75,7 @@ function connect() {
  * @param {string} symbol - The symbol to unsubscribe from.
  * @param {array} intervals - The intervals to unsubscribe from.
  */
-function unsubscribe(wsStream, symbol, intervals) {
+function unsubscribe(symbol, intervals) {
 	wsStream.unsubscribe(symbol);
 	// Find and delete the connection string from the list
 	redis.remove(env.redisWebSockets, symbol);
@@ -83,11 +88,10 @@ function unsubscribe(wsStream, symbol, intervals) {
 
 /**
  * Subscribe to a WebSocket stream for a symbol and its intervals.
- * @param {object} wsStream - The WebSocket stream instance.
  * @param {string} symbol - The symbol to subscribe to.
  * @param {array} intervals - The intervals to subscribe to.
  */
-function subscribe(wsStream, symbol, intervals) {
+function subscribe(symbol, intervals) {
 	wsStream.trade(symbol);
 	redis.lPush(env.redisWebSockets, [symbol]);
 
@@ -185,13 +189,12 @@ function processTrade (trade) {
 		timestamp: trade.E
 	});
 
-	rabbit.sendQueue(env.wsBinance, Buffer.from(JSON.stringify(tradeObject)), 0, 0, (err) => {
-		if (err) {
-			failT++;
-			logger.error(err);
-		}
-    succT++;
-  });
+	rabbit.sendQueue(env.wsBinance, Buffer.from(JSON.stringify(tradeObject)), 0, 0)
+		.then(() => {
+			succT++
+		}).catch((error) => {
+			failT++
+	});
 
 	// Publish the trade object, high and low prices to Redis
 	const channelName = `trade:${trade.s.toLowerCase()}:binance`;
@@ -225,13 +228,12 @@ function processTrade (trade) {
 				}
 			}
 
-			rabbit.sendQueue(env.wsBinance, Buffer.from(JSON.stringify(tradeObject)), 0, 300, (err) => {
-				if (err) {
-					failT++;
-					logger.error(err);
-				}
-				succT++;
-			});
+			rabbit.sendQueue(env.wsBinance, Buffer.from(JSON.stringify(tradeObject)), 0, 300)
+				.then(() => {
+					succK++;
+				}).catch((error) => {
+					failK++
+			})
 		})
 		.catch((err) => {
 			logger.error(`Error processing trade: ${err.message}`);
@@ -307,24 +309,86 @@ function processKline(kline) {
 		});
 }
 
+
+/**
+ * Retrieves and stores klines for the given symbols and intervals in InfluxDB.
+ * @param {Array<string>} symbols - The list of symbols to retrieve klines for.
+ */
+const retrieveAndStoreKlines = async (symbols) => {
+	logger.debug(`Retrieve Symbols as parameter: ${JSON.stringify(symbols)}`);
+	const intervals = await redis.getList(env.redisIntervals);
+	logger.debug(`Retrieve Intervals from Redis: ${intervals}`);
+	const klinesIntervals = calculateKlines(intervals, 30);
+	logger.debug(`Kline count results: ${JSON.stringify(klinesIntervals)}`);
+
+	const dataPointsPromises = symbols.flatMap((symbol) =>
+		Object.entries(klinesIntervals).map(([interval, limit]) => {
+			return client.klines(symbol, interval, { limit }).then((response) => {
+				const dataPoints = response.data.map((kline) => ({
+					symbol,
+					interval,
+					kline,
+				}));
+				return dataPoints;
+			});
+		})
+	);
+
+
+	try {
+		const resolvedDataPoints = await Promise.all(dataPointsPromises);
+		const allDataPoints = [].concat(...resolvedDataPoints.map((symbolDataPoints) =>
+			symbolDataPoints.map(({ symbol, interval, kline }) => {
+				const point = new Point(`binance_kline_${symbol}`)
+					.tag('source', 'Spot API')
+					.tag('asset', symbol)
+					.tag('type', 'kline')
+					.tag('interval', interval)
+					.floatField('open', parseFloat(kline[1]))
+					.floatField('high', parseFloat(kline[2]))
+					.floatField('low', parseFloat(kline[3]))
+					.floatField('close', parseFloat(kline[4]))
+					.floatField('volume', parseFloat(kline[5]))
+					.floatField('quoteAssetVolume', parseFloat(kline[7]))
+					.intField('numberOfTrades', parseInt(kline[8]))
+					.floatField('takerBuyBaseBAssetVolume', parseFloat(kline[9]))
+					.floatField('takerBuyQuoteAssetVolume', parseFloat(kline[10]))
+					.timestamp(BigInt(kline[6] * 1000).toString())
+				return point;
+			})
+		));
+		logger.debug(JSON.stringify(allDataPoints[0]));
+		await writeData(allDataPoints);
+		logger.debug('All kline data is stored in InfluxDB.');
+		return Ok();
+	} catch (error) {
+		logger.error(`Error retrieving or storing kline data: ${error.message}`);
+		return Err(error.message);
+	}
+};
+
+1686729599999000000
+9223372036854775806
+
 module.exports = {
-    webSocket: {
-        connect,
-        disconnect,
-        subscribe,
-        unsubscribe,
-        disconnectAll,
-        // Check if a WebSocket connection is already established for the specified symbol
-        isSubscribed(symbol) {
-            for (const key of Object.keys(wsConnections)) {
-                if (key.startsWith(symbol)) {
-                    return true;
-                }
-            }
-            return false;
+  webSocket: {
+    connect,
+    disconnect,
+    subscribe,
+    unsubscribe,
+    disconnectAll,
+    // Check if a WebSocket connection is already established for the specified symbol
+    isSubscribed(symbol) {
+      for (const key of Object.keys(wsConnections)) {
+        if (key.startsWith(symbol)) {
+          return true;
         }
-    },
-    processTrade,
-    processKline,
-    handleMessage
+      }
+      return false;
+    }
+  },
+  processTrade,
+  processKline,
+  handleMessage,
+	retrieveAndStoreKlines
 };

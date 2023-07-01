@@ -3,6 +3,7 @@ const { Point } = require("@influxdata/influxdb-client");
 const amqp = require("amqp-connection-manager");
 const env = require("../env");
 const logger = require("../utils/logger");
+const {consumeQueuePromise} = require("../services/rabbitmq");
 const workerProcesses = []; // An array to hold worker process objects
 let [successKlines, successTrades, failedKlines, failedTrades] = [0, 0, 0, 0]; // Variables for tracking message statuses
 
@@ -29,33 +30,36 @@ setInterval(() => {
 /**
  * Connects to RabbitMQ and creates a channel for the hopper to use.
  */
-const hopper = amqp.connect([env.rabbitmqUrl]);
+const connection = amqp.connect([env.rabbitmqUrl]);
 
 // Log when the hopper connects to RabbitMQ
-hopper.on('connect', () => {
+connection.on('connect', () => {
 	logger.debug('Hopper connected to RabbitMQ');
-});
-
-// Log errors when the hopper disconnects from RabbitMQ
-hopper.on('disconnect', (err) => {
-	logger.error(`Hopper disconnected from RabbitMQ: ${JSON.stringify(err)}`);
 });
 
 /**
  * The channel used by the hopper to receive messages from RabbitMQ.
  */
-const hopperChan = hopper.createChannel({
+const channelWrapper = connection.createChannel({
 	json: true,
-	setup: (ch) => {
-		ch.assertQueue(env.wsBinance, { noAck: true });
+	setup: (channel) => {
+		return Promise.all([
+			channel.assertQueue(env.wsBinance, { noAck: false })
+		]);
 	}
 });
 
+// Log errors when the hopper disconnects from RabbitMQ
+connection.on('disconnect', (err) => {
+	logger.error(`Hopper disconnected from RabbitMQ: ${JSON.stringify(err)}`);
+});
+
+
 /**
  * Starts the hopper, which creates a specified number of worker processes.
+ * @param {number} numThreads - The number of worker processes to start.
  * @returns {void}
  */
-
 function start(numThreads) {
 	logger.info(`Hopper started`);
 	for (let i = 0; i < numThreads; i++) {
@@ -94,9 +98,7 @@ function startWorkerProcess(callback) {
 
 	// Define the main function
 	function main() {
-    //rabbit.consumeQueue(env.wsBinance, handleMessage)
-    //rabbit.consumeQueuePromise(env.wsBinance, handleMessage)
-    hopperChan.consume(env.wsBinance, handleMessage, { noAck: true })
+		return consumeQueuePromise(env.wsBinance, handleMessage)
 	}
 
 	// Define the worker process object
@@ -118,16 +120,16 @@ function startWorkerProcess(callback) {
 
 /**
  * Handle incoming WebSocket messages.
- * @param {string} data - The message data.
+ * @param {any} data - The message data.
  */
-const handleMessage = (data) => {
+function handleMessage(data) {
 	const item = JSON.parse(data.content.toString());
 	if (!item.data) {
 		return;
 	}
 
-	const payload = JSON.parse(item.data)
-	logger.debug(`Payload: \n${payload}`)
+	const payload = JSON.parse(item.data);
+	logger.debug(`Payload: \n${JSON.stringify(payload, null, 2)}`);
 	const callback = callbacks[payload.eventType];
 
 	if (callback) {
@@ -135,12 +137,15 @@ const handleMessage = (data) => {
 	} else {
 		logger.error('Not supported stream type');
 	}
+
+	// Manually acknowledge the message
+	data.ack();
 }
 
 function handleTradeMessage(message) {
 	if (message === null) return;
 	const payload = message;
-	logger.debug(`Writing Trade to InfluxDB: \n${payload}`)
+	logger.debug(`Writing Trade to InfluxDB: \n${JSON.stringify(payload, null, 2)}`);
 
 	const point = new Point(`binance_trade_${payload.symbol}`)
 		.tag('asset', payload.symbol)
@@ -152,13 +157,13 @@ function handleTradeMessage(message) {
 		.floatField('quantity', payload.quantity)
 		.timestamp(new Date(payload.timestamp));
 
-	logger.debug(`Writing Trade to InfluxDB: \n${payload}`)
+	logger.debug(`Writing Trade to InfluxDB: \n${JSON.stringify(payload, null, 2)}`);
 	writeData([point])
 		.then(() => {
 			successTrades++;
 		})
 		.catch((error) => {
-			logger.error(`Error when inserting Trades from rabbit: ${error}`)
+			logger.error(`Error when inserting Trades from rabbit: ${error}`);
 			failedTrades++;
 		});
 }
@@ -166,7 +171,7 @@ function handleTradeMessage(message) {
 function handleKlineMessage(message) {
 	if (message === null) return;
 	const payload = message;
-  logger.debug(`Writing Kline to InfluxDB: \n${payload}`)
+	logger.debug(`Writing Kline to InfluxDB: \n${JSON.stringify(payload, null, 2)}`);
 
 	const point = new Point(`binance_kline_${payload.symbol}`)
 		.tag('source', 'minions')
@@ -187,7 +192,7 @@ function handleKlineMessage(message) {
 			successKlines++;
 		})
 		.catch((error) => {
-			logger.error(`Error when inserting Klines from rabbit: ${error}`)
+			logger.error(`Error when inserting Klines from rabbit: ${error}`);
 			failedKlines++;
 		});
 }
@@ -197,5 +202,4 @@ module.exports = {
 		start,
 		stop
 	}
-}
-
+};
