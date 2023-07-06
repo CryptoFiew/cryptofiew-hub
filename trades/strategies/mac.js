@@ -1,18 +1,4 @@
-/**
- * Calculates the moving average of an array of numbers over a given period.
- *
- * @param {number[]} data - The array of data points.
- * @param {number} period - The period for the moving average.
- * @returns {number|null} The moving average or null if there's not enough data.
- */
-function calculateMovingAverage(data, period) {
-    if (data.length < period) {
-        return null
-    }
-
-    const sum = data.slice(data.length - period).reduce((a, b) => a + b, 0)
-    return sum / period
-}
+const {calculateSMA} = require("../algo");
 
 /**
  * Determines the trading action (BUY, SELL, or HOLD) based on the moving average crossover algorithm.
@@ -29,8 +15,8 @@ function movingAverageCrossoverAlgorithm(candles, fastPeriodRatio, slowPeriodRat
     const fastPeriod = Math.floor(dataLength * fastPeriodRatio)
     const slowPeriod = Math.floor(dataLength * slowPeriodRatio)
 
-    const fastMA = calculateMovingAverage(candles, fastPeriod)
-    const slowMA = calculateMovingAverage(candles, slowPeriod)
+    const fastMA = calculateSMA(candles, fastPeriod)
+    const slowMA = calculateSMA(candles, slowPeriod)
 
     if (fastMA === null || slowMA === null) {
         return null

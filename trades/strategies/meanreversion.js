@@ -1,17 +1,4 @@
-/**
- * Calculates the mean (average) of an array of numbers.
- *
- * @param {number[]} data - The array of data points.
- * @returns {number|null} The mean or null if there's not enough data.
- */
-function calculateMean(data) {
-    if (data.length === 0) {
-        return null
-    }
-
-    const sum = data.reduce((a, b) => a + b, 0)
-    return sum / data.length
-}
+const {calculateMean} = require("../algo");
 
 /**
  * Implements a basic mean reversion trading strategy.

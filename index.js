@@ -1,9 +1,8 @@
 const { redis } = require('./services/redis')
 const { addWatch, delWatch, listWatch, shutdown } = require('./services/commands')
 const { warmUp } = require('./utils/warmup')
-const { updateTopSymbolsTicker, processTopSymbols, startMinions } = require('./utils/monitor')
+const { updateTopSymbolsTicker, processTopSymbols } = require('./utils/monitor')
 const logger = require('./utils/logger')
-const hopper = require('./minion/hopper-mq')
 const { redisMinionChan } = require('./env')
 const env = require('./env')
 

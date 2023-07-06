@@ -96,7 +96,7 @@ function subscribe(symbol, intervals) {
     redis.lPush(env.redisWebSockets, [symbol])
 
     for (const interval of intervals) {
-        wsStream.kline(symbol, interval)
+        // wsStream.kline(symbol, interval)
     }
 }
 

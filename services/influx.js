@@ -1,5 +1,5 @@
 const { Agent } = require('http')
-const { InfluxDB, Point } = require('@influxdata/influxdb-client')
+const { InfluxDB, Point, DEFAULT_WriteOptions } = require('@influxdata/influxdb-client')
 const { influxUrl, influxToken, influxOrg, influxBucket } = require('../env')
 const logger = require('../utils/logger')
 
@@ -14,7 +14,13 @@ const influx = new InfluxDB({
     transportOptions: { agent },
 })
 
-const writeApi = influx.getWriteApi(influxOrg, influxBucket)
+const writeOptions = {
+    batchSize: 1000,
+    defaultTags: { environment: 'development'},
+    flushInterval: 1000,
+}
+
+const writeApi = influx.getWriteApi(influxOrg, influxBucket, 'ms', writeOptions)
 const queryApi = influx.getQueryApi(influxOrg)
 
 process.on('exit', () => agent.destroy())
@@ -24,13 +30,21 @@ process.on('exit', () => agent.destroy())
  * @param {Point[]} points - The data points to write.
  * @returns {Promise<void>} - A promise that resolves when the write is complete.
  */
-const writeData = (points) =>
-    Promise.resolve()
-        .then(() => points.forEach((point) => writeApi.writePoint(point)))
-        .catch((err) => {
-            logger.error(`Error writing data points to InfluxDB: ${err.message}`)
-            throw err
-        }).finally(() => writeApi.flush())
+const writeData = async (points) => {
+    const dataArray = Array.isArray(points) ? points : [points]
+
+    try {
+        for (const point of dataArray) {
+            writeApi.writePoint(point)
+            // logger.debug(`Data Written in buffer ${JSON.stringify(point)}`)
+        }
+        await writeApi.flush()
+    } catch (err) {
+        logger.error(`Error writing data points to InfluxDB: ${err.message}`)
+        throw err
+    }
+}
+
 
 /**
  * Queries data from InfluxDB using the specified query.
