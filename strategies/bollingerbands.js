@@ -6,12 +6,12 @@
  * @returns {number|null} The simple moving average or null if there's not enough data.
  */
 function calculateSMA(data, period) {
-	if (data.length < period) {
-		return null;
-	}
+    if (data.length < period) {
+        return null
+    }
 
-	const sum = data.slice(0, period).reduce((a, b) => a + b, 0);
-	return sum / period;
+    const sum = data.slice(0, period).reduce((a, b) => a + b, 0)
+    return sum / period
 }
 
 /**
@@ -23,23 +23,23 @@ function calculateSMA(data, period) {
  * @returns {object|null} An object with the upper and lower Bollinger Bands or null if there's not enough data.
  */
 function calculateBollingerBands(data, period, deviation) {
-	if (data.length < period) {
-		return null;
-	}
+    if (data.length < period) {
+        return null
+    }
 
-	const sma = calculateSMA(data, period);
-	if (sma === null) {
-		return null;
-	}
+    const sma = calculateSMA(data, period)
+    if (sma === null) {
+        return null
+    }
 
-	const squaredDifferences = data.slice(0, period).map(value => Math.pow(value - sma, 2));
-	const meanSquaredDifference = squaredDifferences.reduce((a, b) => a + b, 0) / period;
-	const standardDeviation = Math.sqrt(meanSquaredDifference);
+    const squaredDifferences = data.slice(0, period).map(value => Math.pow(value - sma, 2))
+    const meanSquaredDifference = squaredDifferences.reduce((a, b) => a + b, 0) / period
+    const standardDeviation = Math.sqrt(meanSquaredDifference)
 
-	const upperBand = sma + (deviation * standardDeviation);
-	const lowerBand = sma - (deviation * standardDeviation);
+    const upperBand = sma + (deviation * standardDeviation)
+    const lowerBand = sma - (deviation * standardDeviation)
 
-	return { upperBand, lowerBand };
+    return { upperBand, lowerBand }
 }
 
-module.exports = calculateBollingerBands;
+module.exports = calculateBollingerBands

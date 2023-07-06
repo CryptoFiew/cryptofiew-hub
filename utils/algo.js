@@ -1,12 +1,12 @@
-const R = require('ramda');
-const { Just } = require('@sniptt/monads');
+const R = require('ramda')
+const { Just } = require('@sniptt/monads')
 
 const calculateMovingAverage = R.pipe(
-	R.map(R.prop('price')),
-	R.takeLast(20),
-	R.mean,
-	Just
-);
+    R.map(R.prop('price')),
+    R.takeLast(20),
+    R.mean,
+    Just
+)
 
 /**
  * Calculates the simple moving average of a series of prices over a specified period.
@@ -15,8 +15,8 @@ const calculateMovingAverage = R.pipe(
  * @returns {number} The calculated simple moving average.
  */
 const calculateSimpleMovingAverage = (prices, period) => {
-	// ...
-};
+    // ...
+}
 
 /**
  * Calculates the RSI (Relative Strength Index) of a series of prices over a specified period.
@@ -25,8 +25,8 @@ const calculateSimpleMovingAverage = (prices, period) => {
  * @returns {number} The calculated RSI.
  */
 const calculateRSI = (prices, period) => {
-	// ...
-};
+    // ...
+}
 
 /**
  * Calculates the MACD (Moving Average Convergence Divergence) of a series of prices with the given periods.
@@ -37,8 +37,8 @@ const calculateRSI = (prices, period) => {
  * @returns {object} An object containing the MACD values (macd, signal, histogram).
  */
 const calculateMACD = (prices, fastPeriod, slowPeriod, signalPeriod) => {
-	// ...
-};
+    // ...
+}
 
 /**
  * Calculates the Bollinger Bands of a series of prices over a specified period with the given standard deviation.
@@ -48,8 +48,8 @@ const calculateMACD = (prices, fastPeriod, slowPeriod, signalPeriod) => {
  * @returns {object} An object containing the Bollinger Bands values (upper, middle, lower).
  */
 const calculateBollingerBands = (prices, period, deviation) => {
-	// ...
-};
+    // ...
+}
 
 /**
  * Calculates the Stochastic Oscillator of a series of prices over a specified period with the given %K and %D periods.
@@ -60,8 +60,8 @@ const calculateBollingerBands = (prices, period, deviation) => {
  * @returns {object} An object containing the Stochastic Oscillator values (%K, %D).
  */
 const calculateStochasticOscillator = (prices, period, kPeriod, dPeriod) => {
-	// ...
-};
+    // ...
+}
 
 /**
  * Calculates the Volume Weighted Average Price (VWAP) of a series of prices with corresponding volumes.
@@ -70,8 +70,8 @@ const calculateStochasticOscillator = (prices, period, kPeriod, dPeriod) => {
  * @returns {number} The calculated VWAP.
  */
 const calculateVWAP = (prices, volumes) => {
-	// ...
-};
+    // ...
+}
 
 /**
  * Identifies the support levels in a series of prices.
@@ -79,8 +79,8 @@ const calculateVWAP = (prices, volumes) => {
  * @returns {number[]} An array of identified support levels.
  */
 const calculateSupportLevels = (prices) => {
-	// ...
-};
+    // ...
+}
 
 /**
  * Identifies the resistance levels in a series of prices.
@@ -88,8 +88,8 @@ const calculateSupportLevels = (prices) => {
  * @returns {number[]} An array of identified resistance levels.
  */
 const calculateResistanceLevels = (prices) => {
-	// ...
-};
+    // ...
+}
 
 /**
  * Determines if a series of prices exhibits an uptrend.
@@ -97,8 +97,8 @@ const calculateResistanceLevels = (prices) => {
  * @returns {boolean} True if an uptrend is detected, false otherwise.
  */
 const identifyUptrend = (prices) => {
-	// ...
-};
+    // ...
+}
 
 /**
  * Determines if a series of prices exhibits a downtrend.
@@ -106,8 +106,8 @@ const identifyUptrend = (prices) => {
  * @returns {boolean} True if a downtrend is detected, false otherwise.
  */
 const identifyDowntrend = (prices) => {
-	// ...
-};
+    // ...
+}
 
 /**
  * Detects common candlestick patterns in a series of candlestick data.
@@ -115,14 +115,14 @@ const identifyDowntrend = (prices) => {
  * @returns {string[]} An array of detected candlestick patterns.
  */
 const detectCandlestickPatterns = (candles) => {
-	// ...
-};
+    // ...
+}
 
 
 module.exports = {
-	calculateMovingAverage,
-	calculateRSI,
-	calculateMACD,
-	calculateBollingerBands,
-	calculateStochasticOscillator,
-};
+    calculateMovingAverage,
+    calculateRSI,
+    calculateMACD,
+    calculateBollingerBands,
+    calculateStochasticOscillator,
+}

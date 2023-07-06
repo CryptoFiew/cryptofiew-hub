@@ -6,18 +6,18 @@
  * @returns {number|null} The exponential moving average or null if there's not enough data.
  */
 function calculateEMA(data, period) {
-	if (data.length < period) {
-		return null;
-	}
+    if (data.length < period) {
+        return null
+    }
 
-	const k = 2 / (period + 1);
-	let ema = data.slice(0, period).reduce((sum, val) => sum + val, 0) / period;
+    const k = 2 / (period + 1)
+    let ema = data.slice(0, period).reduce((sum, val) => sum + val, 0) / period
 
-	for (let i = period; i < data.length; i++) {
-		ema = (data[i] * k) + (ema * (1 - k));
-	}
+    for (let i = period; i < data.length; i++) {
+        ema = (data[i] * k) + (ema * (1 - k))
+    }
 
-	return ema;
+    return ema
 }
 
 /**
@@ -30,21 +30,21 @@ function calculateEMA(data, period) {
  * @returns {number|null} The MACD histogram or null if there's not enough data.
  */
 function calculateMACD(data, fastPeriod, slowPeriod, signalPeriod) {
-	const fastEMA = calculateEMA(data, fastPeriod);
-	const slowEMA = calculateEMA(data, slowPeriod);
+    const fastEMA = calculateEMA(data, fastPeriod)
+    const slowEMA = calculateEMA(data, slowPeriod)
 
-	if (fastEMA === null || slowEMA === null) {
-		return null;
-	}
+    if (fastEMA === null || slowEMA === null) {
+        return null
+    }
 
-	const macd = fastEMA - slowEMA;
-	const signalLine = calculateEMA([macd], signalPeriod);
+    const macd = fastEMA - slowEMA
+    const signalLine = calculateEMA([macd], signalPeriod)
 
-	if (signalLine === null) {
-		return null;
-	}
+    if (signalLine === null) {
+        return null
+    }
 
-	return macd - signalLine;
+    return macd - signalLine
 }
 
-module.exports = calculateMACD;
+module.exports = calculateMACD

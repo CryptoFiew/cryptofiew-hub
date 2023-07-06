@@ -43,5 +43,8 @@
     "requests": "^0.3.0",
     "socket.io": "^4.6.2",
     "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.44.0"
   }
 }

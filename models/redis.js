@@ -1,7 +1,7 @@
 
 function RedisChanMsg(type, data) {
-  this.type = type;
-  this.data = data;
+    this.type = type
+    this.data = data
 }
 
-module.exports = RedisChanMsg;
+module.exports = RedisChanMsg

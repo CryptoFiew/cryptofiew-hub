@@ -6,12 +6,12 @@
  * @returns {number|null} The moving average or null if there's not enough data.
  */
 function calculateMovingAverage(data, period) {
-	if (data.length < period) {
-		return null;
-	}
+    if (data.length < period) {
+        return null
+    }
 
-	const sum = data.slice(data.length - period).reduce((a, b) => a + b, 0);
-	return sum / period;
+    const sum = data.slice(data.length - period).reduce((a, b) => a + b, 0)
+    return sum / period
 }
 
 /**
@@ -23,26 +23,26 @@ function calculateMovingAverage(data, period) {
  * @returns {string|null} The trading action (BUY, SELL, or HOLD) or null if there's not enough data.
  */
 function movingAverageCrossoverAlgorithm(candles, fastPeriodRatio, slowPeriodRatio) {
-	const dataLength = candles.length;
+    const dataLength = candles.length
 
-	// Calculate the dynamic period based on the data length and provided ratios
-	const fastPeriod = Math.floor(dataLength * fastPeriodRatio);
-	const slowPeriod = Math.floor(dataLength * slowPeriodRatio);
+    // Calculate the dynamic period based on the data length and provided ratios
+    const fastPeriod = Math.floor(dataLength * fastPeriodRatio)
+    const slowPeriod = Math.floor(dataLength * slowPeriodRatio)
 
-	const fastMA = calculateMovingAverage(candles, fastPeriod);
-	const slowMA = calculateMovingAverage(candles, slowPeriod);
+    const fastMA = calculateMovingAverage(candles, fastPeriod)
+    const slowMA = calculateMovingAverage(candles, slowPeriod)
 
-	if (fastMA === null || slowMA === null) {
-		return null;
-	}
+    if (fastMA === null || slowMA === null) {
+        return null
+    }
 
-	if (fastMA > slowMA) {
-		return 'BUY';
-	} else if (fastMA < slowMA) {
-		return 'SELL';
-	} else {
-		return 'HOLD';
-	}
+    if (fastMA > slowMA) {
+        return 'BUY'
+    } else if (fastMA < slowMA) {
+        return 'SELL'
+    } else {
+        return 'HOLD'
+    }
 }
 
-module.exports = movingAverageCrossoverAlgorithm;
+module.exports = movingAverageCrossoverAlgorithm
