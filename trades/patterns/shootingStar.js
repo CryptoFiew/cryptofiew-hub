@@ -5,20 +5,20 @@
  * @returns {boolean} True if the pattern is detected, false otherwise.
  */
 const detectShootingStarPattern = (candles) =>
-	candles.slice(-1).reduce((isShootingStar, currCandle) => {
-		const isUpperShadowSignificantlyLonger =
+    candles.slice(-1).reduce((isShootingStar, currCandle) => {
+        const isUpperShadowSignificantlyLonger =
 			currCandle.high - Math.max(currCandle.open, currCandle.close)
-			> 2 * Math.abs(currCandle.open - currCandle.close);
+			> 2 * Math.abs(currCandle.open - currCandle.close)
 
-		const isLowerShadowShorter =
+        const isLowerShadowShorter =
 			Math.min(currCandle.open, currCandle.close) - currCandle.low
-			< 0.25 * Math.abs(currCandle.open - currCandle.close);
+			< 0.25 * Math.abs(currCandle.open - currCandle.close)
 
-		const isBodyInUpperHalf =
+        const isBodyInUpperHalf =
 			Math.min(currCandle.open, currCandle.close)
-			> currCandle.low + 0.5 * Math.abs(currCandle.high - currCandle.low);
+			> currCandle.low + 0.5 * Math.abs(currCandle.high - currCandle.low)
 
-		return isShootingStar && isUpperShadowSignificantlyLonger && isLowerShadowShorter && isBodyInUpperHalf;
-	}, true);
+        return isShootingStar && isUpperShadowSignificantlyLonger && isLowerShadowShorter && isBodyInUpperHalf
+    }, true)
 
-module.exports = detectShootingStarPattern;
+module.exports = detectShootingStarPattern

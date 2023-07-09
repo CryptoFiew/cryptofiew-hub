@@ -4,7 +4,7 @@ const { writeData } = require('../services/influx')
 const { Spot } = require('@binance/connector')
 const { Point } = require('@influxdata/influxdb-client')
 const env = require('../env')
-const logger = require('../utils/logger')
+const logger = require('../models/logger')
 const {Result, Ok, Err} = require('@sniptt/monads')
 const R = require('ramda')
 /**

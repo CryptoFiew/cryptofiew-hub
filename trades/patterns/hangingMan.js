@@ -1,9 +1,9 @@
 const {
-	isBodyShort,
-	isBodyInTheUpperHalf,
-	isLowerShadowSignificantlyLonger,
-	isUpperShadowSmall
-} = require("../algo");
+    isBodyShort,
+    isBodyInTheUpperHalf,
+    isLowerShadowSignificantlyLonger,
+    isUpperShadowSmall
+} = require('../algorithms/klines')
 
 /**
  * Detects the Hanging Man pattern in a bullish trend.
@@ -11,13 +11,13 @@ const {
  * @returns {boolean} True if the pattern is detected, false otherwise.
  */
 const detectHangingManPattern = (candles) =>
-	candles.slice(-2).reduce(([previousCandle, isUptrend], currentCandle) => {
-		const isBullish = previousCandle.close <= previousCandle.open;
-		const isHangingMan = isLowerShadowSignificantlyLonger(currentCandle) &&
+    candles.slice(-2).reduce(([previousCandle, isUptrend], currentCandle) => {
+        const isBullish = previousCandle.close <= previousCandle.open
+        const isHangingMan = isLowerShadowSignificantlyLonger(currentCandle) &&
 			isUpperShadowSmall(currentCandle) &&
 			isBodyShort(currentCandle) &&
-			isBodyInTheUpperHalf(currentCandle);
-		return [currentCandle, isUptrend && isBullish && isHangingMan];
-	}, [candles[0], true])[1];
+			isBodyInTheUpperHalf(currentCandle)
+        return [currentCandle, isUptrend && isBullish && isHangingMan]
+    }, [candles[0], true])[1]
 
-module.exports = detectHangingManPattern;
+module.exports = detectHangingManPattern

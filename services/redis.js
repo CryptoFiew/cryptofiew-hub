@@ -1,6 +1,6 @@
 const Redis = require('ioredis')
 const env = require('../env')
-const logger = require('../utils/logger')
+const logger = require('../models/logger')
 const { promisify } = require('util')
 
 const redisConfig = {

@@ -1,113 +1,103 @@
-const readline = require('readline');
-const talib = require('ta-lib');
-const {calculateBollingerBands} = require("../algo");
+const BaseStrategy = require('../../models/baseStrategy')
 
-const rl = readline.createInterface({
-	input: process.stdin,
-	output: process.stdout,
-});
+/**
+ * Dollar Cost Averaging (DCA) strategy for purchasing an asset periodically.
+ */
+class DCAStrategy extends BaseStrategy {
+    /**
+   * Create an instance of DCAStrategy.
+   * @param {Exchange} exchange - The exchange instance for trading.
+   * @param {MarketData} marketData - The market data instance for fetching data.
+   * @param {RiskManager} riskManager - The risk manager instance for managing risk.
+   */
+    constructor(exchange, marketData, riskManager) {
+        super(exchange, marketData, riskManager)
+    }
 
-// Function to calculate the dynamic DCA strategy
-function calculateDynamicDCA(klineData, initialInvestment, maxInvestmentPercentage, buyThreshold) {
-	// Extract the close prices from the kline data
-	const closePrices = klineData.map((item) => item.close);
+    /**
+   * Set up variables and initialize the DCA strategy.
+   * Override this method in derived strategy classes to initialize strategy-specific variables.
+   */
+    setup() {
+        super.setup() // Call the setup() method of the base class if necessary
 
-	// Calculate the upper and lower Bollinger Bands using the calculateBollingerBands function
-	const bands = calculateBollingerBands(colsePrices, period, deviation)
+        // Implement the specific logic for setting up the DCA strategy
+        // Example:
+        // - Initialize DCA specific variables
+        // - Set up any necessary indicators or parameters
 
-	// Calculate the required indicators using TA-Lib
-	const [_, upperBand, lowerBand] = talib.BBANDS(closePrices);
+        // Example DCA calculation using the provided function
+        const investmentAmount = 1000 // Total investment amount in the base currency
+        const periodicAmount = 100 // Amount to invest periodically in the base currency
+        const assetPrice = 10 // Current price of the asset in the base currency
 
-// Iterate through the close prices and calculate the investment amount for each period
-	let investmentAmount = initialInvestment;
-	let totalBoughtAmount = 0;
-	const buySignals = [];
-	const investmentAmounts = [];
+        const dcaResult = this.calculateDCA(investmentAmount, periodicAmount, assetPrice)
+        console.log('DCA strategy setup completed.')
+        console.log('DCA Result:', dcaResult)
+    }
 
-	for (let i = 0; i < closePrices.length; i++) {
-		const closePrice = closePrices[i];
-		const upperBollingerBand = upperBand[i];
-		const lowerBollingerBand = lowerBand[i];
+    /**
+   * Start the DCA strategy.
+   * Perform necessary setup tasks and initialization.
+   */
+    start() {
+        super.start()
+        this.setup() // Call the setup() method to initialize strategy-specific variables
+        // Implement the specific logic for starting the DCA strategy
+        console.log('DCA strategy started.')
+    }
 
-		if (closePrice < lowerBollingerBand - buyThreshold * upperBollingerBand) {
-			const maxInvestment = initialInvestment * maxInvestmentPercentage / 100;
-			const remainingInvestment = maxInvestment - totalBoughtAmount;
+    /**
+   * Stop the DCA strategy.
+   * Clean up resources and perform necessary cleanup tasks.
+   */
+    stop() {
+        super.stop()
+        // Implement the specific logic for stopping the DCA strategy
+        console.log('DCA strategy stopped.')
+    }
 
-			const buyAmount = Math.min(investmentAmount, remainingInvestment, closePrice);
-			const boughtCoins = buyAmount / closePrice;
+    /**
+   * Execute the DCA strategy.
+   * Perform the main execution logic for the strategy.
+   */
+    execute() {
+        super.execute()
+        // Implement the specific logic for executing the DCA strategy
+        // Example:
+        // - Fetch necessary market data
+        // - Perform calculations or analysis
+        // - Make trading decisions based on strategy rules
 
-			totalBoughtAmount += buyAmount;
-			investmentAmounts.push(buyAmount);
-			buySignals.push({
-				timestamp: klineData[i].timestamp,
-				price: closePrice,
-				amount: boughtCoins
-			});
-		} else {
-			investmentAmounts.push(0);
-		}
-	}
+        console.log('DCA strategy executed.')
+    }
 
-	return {
-		investmentAmounts,
-		buySignals
-	};
+    /**
+   * Calculate the Dollar Cost Averaging (DCA) for purchasing an asset.
+   * @param {number} investmentAmount - The total investment amount in the base currency.
+   * @param {number} periodicAmount - The amount to invest periodically in the base currency.
+   * @param {number} assetPrice - The current price of the asset in the base currency.
+   * @returns {object} An object with details of the DCA calculation.
+   */
+    calculateDCA(investmentAmount, periodicAmount, assetPrice) {
+        const transactionFee = 0.00075 // Binance transaction fee of 0.075%
+
+        const investmentWithoutFee = investmentAmount * (1 - transactionFee)
+        const numSharesPurchased = investmentWithoutFee / assetPrice
+
+        const additionalAmountWithoutFee = periodicAmount * (1 - transactionFee)
+        const additionalSharesPurchased = additionalAmountWithoutFee / assetPrice
+
+        const totalShares = numSharesPurchased + additionalSharesPurchased
+        const averagePrice = investmentAmount / totalShares
+
+        return {
+            numSharesPurchased,
+            additionalSharesPurchased,
+            totalShares,
+            averagePrice,
+        }
+    }
 }
 
-// Function to retrieve kline data from user input
-function getKlineData() {
-	return new Promise((resolve) => {
-		rl.question('Enter the kline data in the format: {timestamp: 1, close: 10} (type "done" when finished): ', (input) => {
-			const klineData = [];
-			while (input !== 'done') {
-				try {
-					const obj = JSON.parse(input);
-					klineData.push(obj);
-				} catch (error) {
-					console.error('Invalid input format. Please try again.');
-				}
-				input = rl.question();
-			}
-			resolve(klineData);
-		});
-	});
-}
-
-// Function to get user input for parameters
-function getUserInput() {
-	return new Promise((resolve) => {
-		rl.question('Enter the initial investment amount in USDT: ', (initialInvestment) => {
-			rl.question('Enter the maximum investment percentage of the initial investment: ', (maxInvestmentPercentage) => {
-				rl.question('Enter the buy threshold as a percentage of the upper Bollinger Band: ', (buyThreshold) => {
-					resolve({
-						initialInvestment: parseFloat(initialInvestment),
-						maxInvestmentPercentage: parseFloat(maxInvestmentPercentage),
-						buyThreshold: parseFloat(buyThreshold),
-					});
-				});
-			});
-		});
-	});
-}
-
-// Main function to execute the program
-async function runProgram() {
-	console.log('Welcome to the Dynamic DCA Calculator!\n');
-
-	const klineData = await getKlineData();
-	const userInput = await getUserInput();
-
-	const dynamicDCA = calculateDynamicDCA(
-		klineData,
-		userInput.initialInvestment,
-		userInput.maxInvestmentPercentage,
-		userInput.buyThreshold
-	);
-
-	console.log(dynamicDCA);
-
-	rl.close();
-}
-
-// Run the program
-runProgram();
+module.exports = DCAStrategy

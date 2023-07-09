@@ -1,7 +1,7 @@
 const { WebsocketStream, Spot} = require('@binance/connector')
 const { redis } = require('../services/redis')
 const rabbit = require('./rabbitmq')
-const logger = require('../utils/logger')
+const logger = require('../models/logger')
 const env = require('../env')
 const {writeData} = require('./influx')
 const {calculateKlines, convertToNs} = require('../utils/utils')

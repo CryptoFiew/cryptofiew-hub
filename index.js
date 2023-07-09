@@ -2,7 +2,7 @@ const { redis } = require('./services/redis')
 const { addWatch, delWatch, listWatch, shutdown } = require('./services/commands')
 const { warmUp } = require('./utils/warmup')
 const { updateTopSymbolsTicker, processTopSymbols } = require('./utils/monitor')
-const logger = require('./utils/logger')
+const logger = require('./models/logger')
 const { redisMinionChan } = require('./env')
 const env = require('./env')
 

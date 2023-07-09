@@ -1,7 +1,7 @@
 const R = require('ramda')
 const { Nothing } = require('@sniptt/monads')
 const { influx } = require('./influx')
-const movingAverageService = require('../trades/algo')
+const movingAverageService = require('../trades/algorithms/klines')
 
 let fastMA = Nothing
 let slowMA = Nothing

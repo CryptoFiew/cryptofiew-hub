@@ -1,5 +1,5 @@
 const amqp = require('amqp-connection-manager')
-const logger = require('../utils/logger')
+const logger = require('../models/logger')
 
 const env = require('../env')
 const {promisify} = require('../utils/utils')

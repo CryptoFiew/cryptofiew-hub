@@ -1,7 +1,7 @@
 const { writeData } = require('../services/influx')
 const { Point } = require('@influxdata/influxdb-client')
 const env = require('../env')
-const logger = require('../utils/logger')
+const logger = require('../models/logger')
 const {consumeQueuePromise} = require('../services/rabbitmq')
 const workerProcesses = [] // An array to hold worker process objects
 let [successKlines, successTrades, failedKlines, failedTrades] = [0, 0, 0, 0] // Variables for tracking message statuses

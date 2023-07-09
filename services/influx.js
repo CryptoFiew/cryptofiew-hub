@@ -1,7 +1,7 @@
 const { Agent } = require('http')
 const { InfluxDB, Point, DEFAULT_WriteOptions } = require('@influxdata/influxdb-client')
 const { influxUrl, influxToken, influxOrg, influxBucket } = require('../env')
-const logger = require('../utils/logger')
+const logger = require('../models/logger')
 
 const agent = new Agent({
     keepAlive: true, // Reuse existing connection

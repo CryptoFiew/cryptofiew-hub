@@ -1,7 +1,6 @@
 const { MongoClient } = require('mongodb')
 const { mongoHost, mongoDb } = require('../env')
-const { debug, error } = require('../utils/logger')
-const logger = require('../utils/logger')
+const logger = require('../models/logger')
 const {redis} = require('./redis')
 const {arraysEqual} = require('../utils/utils')
 const env = require('../env')
@@ -17,9 +16,9 @@ const client = new MongoClient(uri)
 async function connect() {
     try {
         await client.connect()
-        debug('Connected to MongoDB')
+        logger.debug('Connected to MongoDB')
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -31,9 +30,9 @@ async function connect() {
 async function dispose() {
     try {
         await client.close()
-        debug('Disconnected from MongoDB')
+        logger.debug('Disconnected from MongoDB')
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -47,12 +46,12 @@ async function create(collectionName) {
     try {
         const db = client.db()
         await db.createCollection(collectionName)
-        debug(`Collection ${collectionName} created`)
+        logger.debug(`Collection ${collectionName} created`)
     } catch (err) {
         if (err.message.includes('already exists')) {
-            debug(`Collection ${collectionName} already exists`)
+            logger.debug(`Collection ${collectionName} already exists`)
         } else {
-            error(err)
+            logger.error(err)
             throw err
         }
     }
@@ -68,7 +67,7 @@ async function get(collectionName) {
         const db = client.db()
         return db.collection(collectionName)
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -83,7 +82,7 @@ async function getContents(collectionName) {
         const collection = await get(collectionName)
         return await collection.find().toArray()
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -98,7 +97,7 @@ async function getLength(collectionName) {
         const collection = await get(collectionName)
         return await collection.countDocuments()
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -115,7 +114,7 @@ async function insert(collectionName, document) {
         const result = await collection.insertOne(document)
         return result.insertedId
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -132,7 +131,7 @@ async function inserts(collectionName, documents) {
         const result = await collection.insertMany(documents)
         return result.insertedIds
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -149,7 +148,7 @@ async function find(collectionName, query) {
         const cursor = collection.find(query)
         return await cursor.toArray()
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -165,7 +164,7 @@ async function findOne(collectionName, query) {
         const collection = await get(collectionName)
         return await collection.findOne(query)
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -183,7 +182,7 @@ async function updateOne(collectionName, filter, update) {
         const result = await collection.updateOne(filter, update)
         return result.modifiedCount
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -200,7 +199,7 @@ async function deleteOne(collectionName, filter) {
         const result = await collection.deleteOne(filter)
         return result.deletedCount
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -217,7 +216,7 @@ async function deleteMany(collectionName, filter) {
         const result = await collection.deleteMany(filter)
         return result.deletedCount
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -234,7 +233,7 @@ async function aggregate(collectionName, pipeline) {
         const cursor = collection.aggregate(pipeline)
         return await cursor.toArray()
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -251,7 +250,7 @@ async function createIndex(collectionName, keys, options) {
         const collection = await get(collectionName)
         return await collection.createIndex(keys, options)
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -267,7 +266,7 @@ async function isEmpty(collectionName) {
         const count = await collection.countDocuments()
         return count === 0
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }
@@ -283,7 +282,7 @@ async function purge(collectionName) {
         const result = await collection.deleteMany({})
         return result.deletedCount
     } catch (err) {
-        error(err)
+        logger.error(err)
         throw err
     }
 }

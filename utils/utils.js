@@ -1,5 +1,12 @@
-const logger = require('./logger')
+const logger = require('models/logger')
 const R = require('ramda')
+const { v4: uuidv4 } = require('uuid');
+
+/**
+ * Generates a unique ID.
+ * @returns {string} The unique ID.
+ */
+const generateId = () => uuidv4();
 
 /**
  * Convert a timestamp to nanoseconds.
@@ -142,4 +149,5 @@ module.exports = {
     calculateKlines,
     promisify,
     convertToNs,
+    generateId,
 }

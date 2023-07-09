@@ -1,23 +1,16 @@
 /**
- * Redis Channel Message Structure
+ * Represents a Redis channel message structure.
  */
 class RedisChanMsg {
-	constructor(type, data) {
-		this.type = type
-		this.data = data
-	}
-}
-
-/**
- * Candlestick object structure.
- */
-class Candle {
-	constructor(open, high, low, close) {
-		this.open = open;
-		this.high = high;
-		this.low = low;
-		this.close = close;
-	}
+    /**
+	 * Create a new RedisChanMsg instance.
+	 * @param {string} type - The type of the message.
+	 * @param {any} data - The data associated with the message.
+	 */
+    constructor(type, data) {
+        this.type = type
+        this.data = data
+    }
 }
 
 module.exports = RedisChanMsg

@@ -1,5 +1,5 @@
 const { updateTopSymbolsTicker } = require('./monitor')
-const logger = require('./logger')
+const logger = require('./models/logger')
 const { hopper } = require('../minion/hopper-mq')
 const mongo = require('../services/mongo')
 const {Ok, Err} = require('@sniptt/monads')
