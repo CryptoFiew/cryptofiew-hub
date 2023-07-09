@@ -1,6 +1,6 @@
-const IndicatorResult = require('../../models/indicator')
-const sma = require('./sma')
-const ema = require('./ema')
+const IndicatorResult = require("../../models/indicator");
+const sma = require("./sma");
+const ema = require("./ema");
 
 /**
  * Calculates the Moving Average Convergence Divergence (MACD) using the given data, periods, and signal period.
@@ -12,27 +12,27 @@ const ema = require('./ema')
  * @returns {IndicatorResult|number|null} - The MACD value or null if there's not enough data.
  */
 const macd = (data, shortPeriod, longPeriod, signalPeriod) => {
-    const shortSMA = sma(data, shortPeriod)
-    const longSMA = sma(data, longPeriod)
+  const shortSMA = sma(data, shortPeriod);
+  const longSMA = sma(data, longPeriod);
 
-    if (shortSMA === undefined || longSMA === undefined) {
-        return null
-    }
+  if (shortSMA === undefined || longSMA === undefined) {
+    return null;
+  }
 
-    const macdValue = shortSMA - longSMA
+  const macdValue = shortSMA - longSMA;
 
-    if (data.length < longPeriod + signalPeriod) {
-        return macdValue
-    }
+  if (data.length < longPeriod + signalPeriod) {
+    return macdValue;
+  }
 
-    const signalEMA = ema(data, signalPeriod)
-    const histogram = macdValue - signalEMA
+  const signalEMA = ema(data, signalPeriod);
+  const histogram = macdValue - signalEMA;
 
-    return new IndicatorResult({
-        name: 'MACD',
-        values: [macdValue],
-        metadata: {signalEMA, histogram},
-    })
-}
+  return new IndicatorResult({
+    name: "MACD",
+    values: [macdValue],
+    metadata: { signalEMA, histogram },
+  });
+};
 
-module.exports = macd
+module.exports = macd;

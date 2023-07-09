@@ -1,5 +1,5 @@
-const { min, max, slice } = require('lodash/fp')
-const IndicatorResult = require('../../models/indicator')
+const { min, max, slice } = require("lodash/fp");
+const IndicatorResult = require("../../models/indicator");
 
 /**
  * Calculates the Stochastic Oscillator of a series of prices over a specified period with the given %K and %D periods.
@@ -11,43 +11,46 @@ const IndicatorResult = require('../../models/indicator')
  * @returns {IndicatorResult} An instance of IndicatorResult with the Stochastic Oscillator values (%K, %D), or with empty value array if there's not enough data.
  */
 const stochasticOscillator = (prices, period, kPeriod, dPeriod) => {
-    if (!Array.isArray(prices) || prices.length < period || kPeriod < 1 || dPeriod < 1) {
-        throw new Error('Invalid parameters')
+  if (
+    !Array.isArray(prices) || prices.length < period || kPeriod < 1 ||
+    dPeriod < 1
+  ) {
+    throw new Error("Invalid parameters");
+  }
+
+  const calculateK = (currentClose, lows, highs) => {
+    const lowestLow = min(lows);
+    const highestHigh = max(highs);
+    return ((currentClose - lowestLow) / (highestHigh - lowestLow)) * 100;
+  };
+
+  const calculateD = (kValues) => {
+    const sum = kValues.reduce((sum, k) => sum + k, 0);
+    return sum / kValues.length;
+  };
+
+  const kValues = prices.map((price, index) => {
+    if (index >= period - 1) {
+      const currentPrices = slice(index - period + 1, index + 1, prices);
+      const lows = currentPrices.map((price) => price.low);
+      const highs = currentPrices.map((price) => price.high);
+      const currentClose = price.close;
+      return calculateK(currentClose, lows, highs);
     }
+    return null;
+  }).filter(Boolean);
 
-    const calculateK = (currentClose, lows, highs) => {
-        const lowestLow = min(lows)
-        const highestHigh = max(highs)
-        return ((currentClose - lowestLow) / (highestHigh - lowestLow)) * 100
-    }
+  const dValues = slice(kPeriod - 1, Infinity, kValues)
+    .map((_, index) => calculateD(slice(index, index + kPeriod, kValues)));
 
-    const calculateD = kValues => {
-        const sum = kValues.reduce((sum, k) => sum + k, 0)
-        return sum / kValues.length
-    }
+  return new IndicatorResult({
+    name: "stochasticOscillator",
+    values: [...kValues, ...dValues],
+    metadata: {
+      kValues,
+      dValues,
+    },
+  });
+};
 
-    const kValues = prices.map((price, index) => {
-        if (index >= period - 1) {
-            const currentPrices = slice(index - period + 1, index + 1, prices)
-            const lows = currentPrices.map(price => price.low)
-            const highs = currentPrices.map(price => price.high)
-            const currentClose = price.close
-            return calculateK(currentClose, lows, highs)
-        }
-        return null
-    }).filter(Boolean)
-
-    const dValues = slice(kPeriod - 1, Infinity, kValues)
-        .map((_, index) => calculateD(slice(index, index + kPeriod, kValues)))
-
-    return new IndicatorResult({
-        name: 'stochasticOscillator',
-        values: [...kValues, ...dValues],
-        metadata: {
-            kValues,
-            dValues
-        }
-    })
-}
-
-module.exports = stochasticOscillator
+module.exports = stochasticOscillator;

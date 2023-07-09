@@ -1,5 +1,5 @@
-const { calculateMean, calculateStdDev } = require('../algorithms/klines')
-const IndicatorResult = require('../../models/indicator')
+const { calculateMean, calculateStdDev } = require("../algorithms/klines");
+const IndicatorResult = require("../../models/indicator");
 
 /**
  * Implements mean reversion trading strategy.
@@ -10,39 +10,39 @@ const IndicatorResult = require('../../models/indicator')
  * @returns {IndicatorResult} An instance of IndicatorResult with trade signals: "BUY", "SELL", or "HOLD".
  */
 const meanReversion = (prices, threshold, zScoreThreshold) => {
-    const mean = calculateMean(prices)
+  const mean = calculateMean(prices);
 
-    if (mean === null) {
-        return new IndicatorResult({ name: 'meanReversion' })
+  if (mean === null) {
+    return new IndicatorResult({ name: "meanReversion" });
+  }
+
+  const stdDev = calculateStdDev(prices);
+
+  if (stdDev === null) {
+    return new IndicatorResult({ name: "meanReversion" });
+  }
+
+  const tradeSignals = [];
+  const zScores = prices.map((price) => (price - mean) / stdDev);
+
+  for (let i = 0; i < prices.length; i++) {
+    if (prices[i] > mean + threshold && zScores[i] > zScoreThreshold) {
+      tradeSignals.push("SELL");
+    } else if (prices[i] < mean - threshold && zScores[i] < -zScoreThreshold) {
+      tradeSignals.push("BUY");
+    } else {
+      tradeSignals.push("HOLD");
     }
+  }
 
-    const stdDev = calculateStdDev(prices)
+  return new IndicatorResult({
+    name: "meanReversion",
+    values: tradeSignals,
+    metadata: {
+      mean,
+      stdDev,
+    },
+  });
+};
 
-    if (stdDev === null) {
-        return new IndicatorResult({ name: 'meanReversion' })
-    }
-
-    const tradeSignals = []
-    const zScores = prices.map((price) => (price - mean) / stdDev)
-
-    for (let i = 0; i < prices.length; i++) {
-        if (prices[i] > mean + threshold && zScores[i] > zScoreThreshold) {
-            tradeSignals.push('SELL')
-        } else if (prices[i] < mean - threshold && zScores[i] < -zScoreThreshold) {
-            tradeSignals.push('BUY')
-        } else {
-            tradeSignals.push('HOLD')
-        }
-    }
-
-    return new IndicatorResult({
-        name: 'meanReversion',
-        values: tradeSignals,
-        metadata: {
-            mean,
-            stdDev
-        }
-    })
-}
-
-module.exports = meanReversion
+module.exports = meanReversion;

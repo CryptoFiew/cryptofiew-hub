@@ -1,4 +1,9 @@
-const { isBodyShort, isUpperShadowSignificantlyLonger, isLowerShadowSmall, isBodyInTheLowerHalf } = require('../algorithms/klines')
+const {
+  isBodyShort,
+  isUpperShadowSignificantlyLonger,
+  isLowerShadowSmall,
+  isBodyInTheLowerHalf,
+} = require("../algorithms/klines");
 
 /**
  * Detects the Inverted Hammer pattern in a bearish trend.
@@ -6,13 +11,13 @@ const { isBodyShort, isUpperShadowSignificantlyLonger, isLowerShadowSmall, isBod
  * @returns {boolean} True if the pattern is detected, false otherwise.
  */
 const detectInvertedHammerPattern = (candles) =>
-    candles.slice(-2).reduce(([previousCandle, isDowntrend], currentCandle) => {
-        const isBearish = previousCandle.close >= previousCandle.open
-        const isInvertedHammer = isUpperShadowSignificantlyLonger(currentCandle) &&
-			isLowerShadowSmall(currentCandle) &&
-			isBodyShort(currentCandle) &&
-			isBodyInTheLowerHalf(currentCandle)
-        return [currentCandle, isDowntrend && isBearish && isInvertedHammer]
-    }, [candles[0], true])[1]
+  candles.slice(-2).reduce(([previousCandle, isDowntrend], currentCandle) => {
+    const isBearish = previousCandle.close >= previousCandle.open;
+    const isInvertedHammer = isUpperShadowSignificantlyLonger(currentCandle) &&
+      isLowerShadowSmall(currentCandle) &&
+      isBodyShort(currentCandle) &&
+      isBodyInTheLowerHalf(currentCandle);
+    return [currentCandle, isDowntrend && isBearish && isInvertedHammer];
+  }, [candles[0], true])[1];
 
-module.exports = detectInvertedHammerPattern
+module.exports = detectInvertedHammerPattern;
