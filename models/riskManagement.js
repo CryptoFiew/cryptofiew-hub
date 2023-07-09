@@ -1,4 +1,4 @@
-const mongo = require('../services/mongo')
+const influx = require('../services/influx')
 const { AssetPair } = require('../models/assets')
 
 class RiskManagement {
@@ -18,7 +18,7 @@ class RiskManagement {
    * @returns {Promise<void>}
    */
     async calculateAssetRisk(assetPair) {
-        const historicalPrices = await mongo.getHistoricalPrices(assetPair)
+        const historicalPrices = await influx.getHistoricalPrices(assetPair)
         const volatility = assetPair.calculateVolatility(historicalPrices)
         this.assetRisks.set(assetPair, volatility)
     }
@@ -56,7 +56,7 @@ class RiskManagement {
         const assets = [...new Set(this.portfolio.wallets.map(wallet => wallet.asset))]
 
         // Fetch historical prices for all assets
-        const historicalPrices = await Promise.all(assets.map(asset => mongo.getHistoricalPrices(asset)))
+        const historicalPrices = await Promise.all(assets.map(asset => influx.getHistoricalPrices(asset)))
 
         const correlations = new Map()
 

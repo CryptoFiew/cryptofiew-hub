@@ -97,9 +97,37 @@ const queryMetricData = (metric) => {
     return result
 }
 
+/**
+ * Queries historical price data from InfluxDB for the specified symbol and period.
+ * @param {string} symbol - The trading symbol to query historical price data for.
+ * @param {number} start - The start timestamp of the period to query data for.
+ * @param {number} end - The end timestamp of the period to query data for.
+ * @returns {Promise<object[]>} - A promise that resolves with an array of historical price data points.
+ */
+const getHistoricalPrices = (symbol, start, end) => {
+    const query = `
+        from(bucket: "${influxBucket}")
+            |> range(start: ${new Date(start)}, stop: ${new Date(end)})
+            |> filter(fn: (r) => r._measurement == "price" and r.symbol == "${symbol}")
+    `
+    return queryData(query)
+        .then((result) => {
+            return result.map((dataPoint) => ({
+                timestamp: new Date(dataPoint._time).getTime(),
+                symbol: dataPoint.symbol,
+                price: dataPoint._value,
+            }))
+        })
+        .catch((err) => {
+            logger.error(`Error querying historical prices for symbol ${symbol} from ${start} to ${end}: ${err.message}`)
+            throw err
+        })
+}
+
 module.exports = {
     writeData,
     queryData,
     queryMetricData,
     queryLatestDataPoint,
+    getHistoricalPrices
 }
